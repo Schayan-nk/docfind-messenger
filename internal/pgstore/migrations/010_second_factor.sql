@@ -1,0 +1,13 @@
+-- The authenticator-app sign-in step, one document per account.
+--
+-- A column on users rather than a table of its own, because it has to travel
+-- with the account everywhere the account goes: the accounts are saved as a
+-- whole set, and the emergency snapshot taken from them is what lets people
+-- sign in with this database down. A second table the snapshot did not carry
+-- would make emergency sign-in a way round the second step.
+--
+-- NULL is "password only", which is every account until its owner turns the
+-- step on. The document holds the key SEALED (AES-GCM under a key file on the
+-- application server, not in this database) and the recovery codes as
+-- SHA-256 hashes: a copy of this table alone signs nobody in.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS second_factor jsonb;

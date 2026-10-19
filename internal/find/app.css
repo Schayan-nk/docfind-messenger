@@ -1,0 +1,3641 @@
+/*
+  The application's one stylesheet.
+  ================================
+
+  Every page in this app used to carry its own. The document browser was a
+  pre-compiled Tailwind build (light and dark, blue, left-to-right), the report
+  dashboard was hand-written CSS (dark only, orange, right-to-left), and the
+  sign-in and settings pages were a third thing again -- so moving between them
+  looked like moving between different products, and no value was defined in
+  one place.
+
+  This file is that one place. It is served from the binary at /app.css and
+  linked by every page, so a change to a colour or a radius happens once.
+
+  Two decisions shape it:
+
+  Dark only, on purpose. Not "dark when the device is": a report screen that
+  turns white at sunset because a phone switched theme is a different-looking
+  product twice a day, and this is meant to look the same on a wall display and
+  in someone's hand.
+
+  Right-to-left by default. The content is Persian. Everything here uses the
+  logical properties (inline-start, inline-end) rather than left and right, so
+  the same rules lay out correctly in either direction and the occasional
+  Latin-only screen still works.
+*/
+
+/* ============================================================ webfonts
+
+   Two families, both served from this binary at /static/fonts: Vazirmatn for
+   Persian and Archivo for Latin.
+
+   This replaces a stack that named "B Nazanin", "B Zar" and "B Titr" and
+   loaded nothing -- those are fonts that happen to be installed on Iranian
+   Windows machines, so the application looked different on every desk and, on
+   a machine without them, fell through to Tahoma. Measured on this build
+   machine: Archivo was already named as the Latin face and was not installed
+   at all, so none of the Latin text was ever in the font the stylesheet asked
+   for.
+
+   Shipping them keeps the original constraint rather than breaking it: nothing
+   is fetched from a font CDN, which the CSP would refuse and an offline PWA
+   could not rely on anyway. They are embedded, so a deploy is still one .exe.
+
+   Mixed Persian-and-Latin sentences sort themselves out. Each Archivo face
+   declares the unicode-range it actually covers -- taken verbatim from Google's
+   own subset CSS -- so a browser uses Archivo for Latin codepoints and falls
+   through to Vazirmatn for Persian ones within the same run of text. Persian
+   digits (U+06F0-06F9) sit outside Archivo's range and so stay in Vazirmatn,
+   which is what stops the figures in a Persian sentence changing shape
+   mid-line. */
+
+@font-face {
+  font-family: Archivo;
+  font-style: normal;
+  /* One variable file spans the whole weight range, so there is no separate
+     bold to load or to get out of step. */
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/static/fonts/Archivo-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: Archivo;
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/static/fonts/Archivo-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Vazirmatn carries no unicode-range: it is the fallback for everything
+   Archivo does not claim, which is all of the Persian. */
+@font-face {
+  font-family: Vazirmatn;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/Vazirmatn-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: Vazirmatn;
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/Vazirmatn-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: Vazirmatn;
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/fonts/Vazirmatn-Bold.woff2") format("woff2");
+}
+
+/* ============================================================ tokens */
+:root {
+  /* Surfaces, from the page upward. Three distinct planes: the previous
+     design used one card colour for everything, so a table header, a filter
+     bar and a card all sat at the same depth and the eye had nothing to
+     climb. */
+  /* The navy family, from the home page.
+     ------------------------------------
+     These were a neutral slate (#0b1120 upward) with an orange accent, and the
+     home page was built in a different palette -- so the application read as
+     two products with a shared header. The home page is the anchor now, and
+     everything below is its scheme extended to screens that have to carry
+     dense data rather than one calendar.
+     The hues are the home page's own: 192-203 degrees for every surface, the
+     warm 21-39 degrees for the accents, 344 for emphasis. Four steps, because
+     a table header, a filter bar and a card have to be told apart by depth and
+     three was not enough.
+     Every text pair over these was measured rather than chosen -- see the ink
+     block below for the numbers. */
+  --bg: #142F40;
+  --surface: #1B3A4D;
+  --surface-2: #234A60;
+  --surface-3: #2C5872;
+
+  /* Text. Three weights of emphasis is enough; more and the hierarchy stops
+     meaning anything. */
+  /* Three levels of emphasis, all of which clear WCAG AA (4.5:1) against
+     every surface they are used on -- checked, not assumed. The faint tone
+     was two steps darker and measured 3.93:1 on --surface and 3.04:1 on
+     --surface-3: legible to good eyes on a good monitor, and a real failure
+     for everyone else, on exactly the text that carries file sizes, dates and
+     record counts. */
+  /* Cream rather than blue-white, so text on these navies belongs to the same
+     scheme as the home page's panels. Measured against all four surfaces:
+       fg        11.95  10.26   8.13   6.57
+       fg-muted   8.76   7.53   5.96   4.82
+       fg-faint   7.77   6.67   5.29   4.27
+     so body text is AA or better everywhere, and only the faint tone on the
+     hover surface drops to AA-large -- which is metadata on a transient
+     state, not prose. */
+  --fg: #F3EDE4;        /* 10.3:1 on surface */
+  --fg-muted: #C3CFD8;  /*  7.5:1 on surface */
+  --fg-faint: #B4C4CF;  /*  6.7:1 on surface */
+
+  --line: #2F5B73;
+  --line-soft: #21455A;
+  /* Fields are recessed rather than raised, which is the one reliable way to
+     say "type here" without a label doing all the work. It has to be a step
+     of its own: fields used to take --bg, and against a card that is a
+     difference of 1.2:1 -- so on the analysis screen the date boxes were
+     invisible until you clicked one. This is 1.9:1 below the card and carries
+     a brighter hairline. */
+  --input-bg: #0D2130;
+  --input-line: #3A6B85;
+  /* The home page's tan hairline, as a token. It is the edge that makes a
+     panel look drawn rather than filled, and it is the one warm line in an
+     otherwise cool interface -- so it is the detail that ties a report card to
+     the calendar. */
+  --line-warm: rgb(217 170 144 / .34);
+
+  /* Orange leads.
+     ------------
+     Chosen by the client, who wanted the interface's action colour to be this
+     orange rather than the tan it had been. Measured before being adopted,
+     because it is a darker colour than the tan and the direction of that
+     change matters on a dark interface -- contrast against the four navies:
+
+                      #E5641D   (the tan it replaces)
+       page            4.09          6.69
+       surface         3.51          5.74
+       surface-2       2.78          4.55
+       surface-3       2.25          3.68
+
+     So: fine as a fill with navy ink (4.09:1), fine as a border or a rule,
+     fine for a heading. What it cannot do is small text on a pale card --
+     11px metadata on --surface-2 measures 2.78:1, which is the one thing this
+     colour is not able to be. --accent-lift is for those: the same orange
+     taken up in value until it reads, 6.07:1 on the page and 3.34:1 on the
+     lightest card. It is used for the handful of ~11-13px labels and nowhere
+     else, because two oranges at the same size would read as a mistake. */
+  --accent: #E5641D;
+  --accent-hover: #F2874A;
+  /* Navy on the orange fill. Darkened from #142F40, which measured 4.09:1 --
+     the old value's own comment recorded that number, and WCAG AA wants 4.5
+     for text this size, so it was a known near-miss rather than an oversight.
+     Lighthouse failed it on the settings page at 4.08.
+     Measured at BOTH grounds this ink is used on, because an accent has two:
+       #E5641D (rest)  -> 4.79:1
+       #F2874A (hover) -> 6.47:1
+     Solving a colour against one ground and shipping it is how the last four
+     contrast regressions on this project happened. */
+  --accent-ink: #0E2230;
+  --accent-lift: #F59260;     /* the same orange, for small text on cards */
+  --accent-soft: rgb(229 100 29 / .16);
+  --ring: rgb(229 100 29 / .5);
+  /* The brand orange, kept for the brand mark and nothing else. */
+  --brand: #f97316;
+
+  /* Status. Each is a fill, a tint and an ink, so a badge never has to guess.
+     The inks are the light steps -- a status colour dark enough to fill a
+     shape is never light enough to be read as text on these surfaces, which
+     is the mistake the previous set made with --bad. */
+  --ok: #5FB89F;   --ok-bg: rgb(95 184 159 / .15);   --ok-ink: #6FC4AB;
+  --warn: #E0B15C; --warn-bg: rgb(224 177 92 / .15); --warn-ink: #E5BA6B;
+  --bad: #D9566F;  --bad-bg: rgb(217 86 111 / .16);  --bad-ink: #EC9AAA;
+  --info: #62929E; --info-bg: rgb(98 146 158 / .16); --info-ink: #8FBDC8;
+  /* The scheme's rose, as the emphasis tone. Lightened from the home page's
+     #A6445D, which measures 2.8:1 on this ground and is only legible there
+     because it sits on a cream panel. */
+  --rose-ink: #E09DB0;
+
+  /* Chart series.
+     -------------
+     Every one is from the scheme, and every one was measured against the card
+     it is drawn on: 8.94, 5.74, 5.84, 6.03, 4.63, 5.78, 5.43, 4.13 -- all
+     clear of the 3:1 a shape needs. Their hues spread 39, 21, 192, 39, 344,
+     162, 203, 322 and their lightnesses 85 to 60 per cent, so they differ in
+     value as well as hue and survive a greyscale print or a projector that
+     flattens colour.
+     The previous set was a stock rainbow -- orange, sky, emerald, yellow,
+     violet, pink, teal, slate -- with no relation to anything else on screen,
+     which is what made a chart look pasted in from another application. */
+  --c1: #E7DECD; --c2: #D9AA90; --c3: #8FBDC8; --c4: #E0B15C;
+  --c5: #D98BA0; --c6: #6FC4AB; --c7: #9DB2BF; --c8: #B98AA8;
+
+  /* The analysis and scoring palette: a warm ramp, ordered light to dark,
+     because those charts encode rank rather than category -- the ordering has
+     to be visible in the colour itself. --ap8 is outside the ramp, for the one
+     series that means "good" rather than "nth".
+
+     It must live on :root: cssVar() reads computed style from
+     documentElement, so a token scoped to a section would resolve to the
+     empty string and every bar would come out transparent.
+
+     Previously duplicated in dashboard.html and evaluation.html, and the two
+     copies had already drifted -- the evaluation page was missing --ap2 and
+     --ap7 entirely. */
+     The whole ramp was lifted when the ground changed. It was built against a
+     near-black page, where a dark terracotta bar still read; on the navy it
+     did not -- #A65E46 measured 2.45:1 on a card, which is a bar you cannot
+     see. Every step is now at least 3.46:1, the ordering is unchanged, and
+     the hues are the same warm progression. */
+  --ap1: #C9735A;   /* terracotta -- the leading bar, 3.46:1 */
+  --ap2: #D4834A;   /* amber,      4.06:1 */
+  --ap3: #DCA268;   /* cognac,     5.35:1 */
+  --ap4: #E3B79C;   /* tan,        6.55:1 */
+  --ap5: #EBCEBE;   /* champagne,  8.02:1 */
+  --ap6: #F0E3D9;   /* cream,      9.49:1 */
+  --ap7: #F9EDF0;   /* blush -- the trailing bar, 10.46:1 */
+  --ap8: #5FB89F;   /* emerald: the same green as --ok, 5.03:1 */
+
+  /* Type.
+     ------
+     Two families now do all of it, both shipped in the binary: Vazirmatn for
+     Persian, Archivo for Latin. See the @font-face block above for why, and
+     for how a mixed sentence splits between them on its own.
+
+     Archivo is named FIRST in every stack. That is not a preference -- its
+     faces declare a unicode-range covering only Latin, so listing it first is
+     what lets the browser take Latin codepoints from Archivo and Persian ones
+     from Vazirmatn inside the same word run. Reverse the order and Vazirmatn,
+     which claims everything, would answer for the Latin too.
+
+     The installed Iranian faces stay on as a floor for the seconds before a
+     webfont arrives, and for the case where /static is unreachable. */
+  --font: Archivo, Vazirmatn, "B Nazanin", "Segoe UI", Tahoma,
+          -apple-system, "SF Pro Text", Roboto, sans-serif;
+  /* Titles are Vazirmatn Bold. The weight is set by the rules that use this,
+     not here, because a font-family cannot carry one. */
+  --font-display: Archivo, Vazirmatn, "B Titr", "Segoe UI", Tahoma, sans-serif;
+  /* Latin-only runs -- a name written in English, a reference number -- where
+     falling through to a Persian face would be wrong rather than just plain. */
+  --font-latin: Archivo, "Segoe UI", Tahoma, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --text-xs: 12.5px;
+  --text-sm: 13.5px;
+  --text-base: 14.5px;
+  --text-md: 15.5px;
+  --text-lg: 17px;
+  --text-xl: 21.5px;
+
+  --leading-tight: 1.35;
+  --leading: 1.7;
+
+  /* Spacing, on a 3px grid -- the compact scale, which is the default.
+     The roomier 4px scale is under :root[data-density="comfortable"] below,
+     for anyone who asks for it. That way round on purpose: the default has to
+     be what the stylesheet paints before any account has loaded, or the first
+     paint is one scale and the second is another. */
+  --s1: 3px; --s2: 6px; --s3: 9px; --s4: 12px;
+  --s5: 15px; --s6: 18px; --s8: 24px; --s10: 30px;
+
+  /* Content widths.
+     ---------------
+     Three, and each page picks one by setting --page-max on its body. That is
+     the point of the token: the app bar computes its own gutter from
+     --page-max, so a header lines up with the content beneath it without every
+     page wrapping its bar in another div.
+     Before this there were four separate numbers -- 1500 on the reports list,
+     1240 on the home and scoring pages, 1000 on settings, 1200 on the
+     breadcrumb -- and the bar was pinned to 1500 for all of them. Measured on
+     a 2560px monitor: the brand sat 130px outside the column it was above.
+       wide  the reports grid, which genuinely earns more columns
+       read  the default reading column
+       form  a single column of fields, where longer lines hurt */
+  --content-wide: 1500px;
+  --content-read: 1240px;
+  --content-form: 1000px;
+  --page-max: var(--content-read);
+
+  --radius-sm: 7px;
+  --radius: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / .3);
+  --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px -12px rgb(0 0 0 / .55);
+  --shadow-lg: 0 10px 34px rgb(0 0 0 / .55);
+
+  --fast: .12s;
+  --normal: .18s;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+
+  /* Messenger motion (docs/chat/SPEC.md 8.1). Lists animate only transform and
+     opacity; every movement has a reduced-motion fade (see the media query). */
+  --dur-fast: 120ms;
+  --dur-base: 240ms;
+  --dur-slow: 360ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --z-sticky: 30;
+  --z-drawer: 40;
+  --z-popover: 60;
+  --z-toast: 70;
+}
+
+/* A sampled spring (small overshoot) where the browser has linear(); the
+   cubic-bezier above is the fallback everywhere else. */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017 19.7%, 1.056 22.4%, 1.067 24.6%, 1.062 27.5%, 1.036 32.4%, 1.009 37.6%, 0.997 42.4%, 0.995 49.3%, 1.001 64.7%, 1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 100ms; --dur-base: 100ms; --dur-slow: 100ms; }
+}
+
+html { color-scheme: dark; }   /* dark scrollbars and native controls too */
+
+/* The hidden attribute has to win.
+   Its user-agent rule is display:none, which any class rule that sets display
+   defeats -- and several here do. That bit the profile picture: .ava sets
+   display:block, so the hidden <img> placeholder rendered anyway and two
+   circles stacked, the second overflowing into the card below. Declared once,
+   globally, because the next element to be toggled with [hidden] would hit
+   exactly the same thing. */
+[hidden] { display: none !important; }
+
+/* ============================================================== reset */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 500 var(--text-md)/var(--leading) var(--font);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Headings take the display face at 700 -- Vazirmatn Bold.
+   The weight used to be dialled back to 500, which was right for B Titr: that
+   is a display face, heavy by design, and asking it for more gave a smeared,
+   over-inked line. Vazirmatn is a text face, so 500 left titles looking like
+   body copy and the page had no hierarchy above it. */
+h1, h2, h3, h4 {
+  margin: 0; font-family: var(--font-display); font-weight: 700;
+  line-height: var(--leading-tight);
+}
+h1 { font-size: var(--text-xl); letter-spacing: -.015em; }
+h2 { font-size: var(--text-lg); letter-spacing: -.01em; }
+h3 { font-size: var(--text-md); }
+
+/* Figures line up in columns and never reflow as they tick over. */
+.num, td.num, .tabular { font-variant-numeric: tabular-nums; }
+p { margin: 0; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* One focus ring for the whole application, and only for keyboard users --
+   a mouse click that also draws a ring reads as an error state. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+:focus:not(:focus-visible) { outline: none; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3); border-radius: 5px;
+  border: 2px solid transparent; background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--line); background-clip: content-box; }
+
+/* Skip link: the first thing a keyboard reaches, invisible until focused. */
+.skip {
+  position: absolute; inset-inline-start: -9999px; top: var(--s2); z-index: var(--z-toast);
+  padding: var(--s2) var(--s4); background: var(--accent); color: var(--accent-ink);
+  border-radius: var(--radius); font-weight: 650;
+}
+.skip:focus { inset-inline-start: var(--s2); }
+
+/* ========================================================== buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 8px 15px;
+  font: 600 var(--text-base)/1.2 var(--font);
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.btn:hover:not(:disabled) { background: var(--surface-3); border-color: var(--accent); }
+.btn:active:not(:disabled) { transform: translateY(.5px); }
+.btn:disabled { opacity: .42; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--accent); color: var(--accent-ink);
+  border-color: transparent; font-weight: 650;
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: transparent; }
+
+/* No border, no fill until hovered: for toolbar actions that should not
+   compete with the primary one. */
+.btn-ghost {
+  background: transparent; border-color: transparent; color: var(--fg-muted);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2); border-color: transparent; color: var(--fg);
+}
+
+.btn-danger { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+.btn-danger:hover:not(:disabled) { background: #55203585; border-color: var(--bad); }
+
+.btn-sm { padding: 5px 11px; font-size: var(--text-sm); }
+.btn-icon { padding: 7px; }
+.btn .ic { width: 15px; height: 15px; flex: none; }
+
+/* =========================================================== inputs */
+.input, .select, textarea.input {
+  width: 100%;
+  padding: 8px 11px;
+  font: 500 var(--text-base)/1.4 var(--font);
+  color: var(--fg);
+  background: var(--input-bg);
+  border: 1px solid var(--input-line);
+  border-radius: var(--radius);
+  /* A hairline of shadow at the top edge, which is what reads as recessed.
+     One pixel, not a bevel: the difference between a field that looks sunk
+     and one that looks like a 2009 button. */
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .28);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.input::placeholder { color: var(--fg-faint); }
+.input:hover:not(:disabled), .select:hover, textarea.input:hover:not(:disabled) {
+  border-color: var(--line);
+}
+.input:focus, .select:focus, textarea.input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .28), 0 0 0 3px var(--ring);
+}
+.input:disabled { opacity: .5; cursor: not-allowed; }
+
+/* The chevron is drawn here rather than left to the platform, which puts its
+   own arrow on the wrong edge in a right-to-left control on Windows. */
+.select {
+  appearance: none; cursor: pointer; padding-inline-start: 32px;
+  /* stroke is --fg-muted, baked in: a data URI can't read a custom property.
+     Kept in step with the token by hand -- if --fg-muted moves, this moves. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' fill='none' stroke='%23C3CFD8' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: left 11px center;
+}
+
+.label {
+  display: block; margin-bottom: 5px;
+  font: 600 var(--text-xs)/1.4 var(--font);
+  color: var(--fg-muted);
+}
+.hint { margin-top: 5px; font-size: var(--text-xs); color: var(--fg-faint); line-height: 1.6; }
+.field { margin-bottom: var(--s4); }
+.field-error .input { border-color: var(--bad); }
+.field-error .hint { color: var(--bad); }
+
+/* A search box with room for its icon. */
+.search { position: relative; }
+.search .input { padding-inline-start: 36px; border-radius: var(--radius-full); background: var(--surface-2); }
+.search .ic-search {
+  position: absolute; inset-inline-start: 12px; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px; color: var(--fg-faint); pointer-events: none;
+}
+.search .clear {
+  position: absolute; inset-inline-end: 8px; top: 50%; transform: translateY(-50%);
+  width: 19px; height: 19px; display: none; place-items: center;
+  border: 0; border-radius: var(--radius-full);
+  background: var(--surface-3); color: var(--fg-muted);
+  font-size: 11px; line-height: 1; cursor: pointer;
+}
+.search .clear:hover { background: var(--accent); color: var(--accent-ink); }
+.search .clear.on { display: grid; }
+
+/* ========================================================= surfaces */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+}
+
+/* ------------------------------------------------------------ glass
+   Apple's Liquid Glass, as far as CSS can honestly take it.
+
+   The published skill for this is SwiftUI -- `.glassEffect()` and
+   `GlassEffectContainer` -- and there is no CSS in it to lift. What is
+   reproducible is the behaviour Apple describes, which is four things
+   happening at once:
+
+     1. blur, so the material is translucent rather than transparent;
+     2. saturation, which is what keeps the colour behind it alive instead of
+        turning muddy grey -- the single most important part, and the one most
+        web "glassmorphism" leaves out;
+     3. a specular rim, brightest where a light source would strike and
+        falling away around the form;
+     4. refraction at the edge, where the material is thickest and bends what
+        is behind it.
+
+   The fourth is the one that separates glass from frosted plastic, and it is
+   the one usually missing on the web. Here the edge gets a second, much
+   stronger blur through a mask, so content behind the rim smears the way it
+   does through a bevel while the middle stays legible.
+
+   Deliberately not applied to everything. Glass earns its keep where there is
+   something behind it worth suggesting -- a floating tile, a popover, a bar
+   pinned over scrolling content. On a panel lying flat on the background it
+   costs a compositor layer and buys nothing.
+
+   backdrop-filter is not universal; the fallback is a solid surface, with
+   identical layout and only the texture lost. */
+.glass {
+  position: relative;
+  background: rgb(24 34 58 / .72);
+  border: 1px solid rgb(255 255 255 / .08);
+  box-shadow:
+    var(--shadow),
+    inset 0 1px 0 rgb(255 255 255 / .07),
+    inset 0 -1px 0 rgb(0 0 0 / .22);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .glass {
+    background: rgb(24 34 58 / .5);
+    -webkit-backdrop-filter: blur(20px) saturate(185%);
+    backdrop-filter: blur(20px) saturate(185%);
+  }
+  /* The refracting rim: a second, heavier blur confined to the outer few
+     pixels by a mask, so only the edge distorts. */
+  .glass::before {
+    content: ''; position: absolute; inset: 0; z-index: 0;
+    border-radius: inherit; pointer-events: none;
+    -webkit-backdrop-filter: blur(7px) saturate(150%) brightness(1.06);
+    backdrop-filter: blur(7px) saturate(150%) brightness(1.06);
+    -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+    mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    padding: 7px;
+  }
+  /* Everything the element actually contains sits above that rim. */
+  .glass > * { position: relative; z-index: 1; }
+}
+
+/* The specular highlight: strongest at the leading corner and falling away,
+   the way a single light source catches a curved edge. */
+.glass-lit { position: relative; overflow: hidden; }
+.glass-lit::after {
+  content: ''; position: absolute; inset: 0; z-index: 2;
+  border-radius: inherit; pointer-events: none;
+  background:
+    linear-gradient(to left,
+      rgb(255 255 255 / .24), rgb(255 255 255 / .06) 42%, transparent 78%)
+      top / 100% 1px no-repeat,
+    radial-gradient(120% 80% at 100% 0%,
+      rgb(255 255 255 / .07), transparent 60%);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  /* Somebody who has asked the system for less transparency has asked for
+     exactly this to stop. */
+  .glass, .card-link, .appbar, .navsheet {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: var(--surface) !important;
+  }
+  .glass::before { display: none; }
+}
+.card-head {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  padding: 13px var(--s4);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--text-md); font-weight: 650;
+}
+.card-body { padding: var(--s4); }
+.spacer { margin-inline-start: auto; }
+
+/* ========================================================== badges */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: var(--radius-full);
+  font: 600 var(--text-xs)/1.6 var(--font);
+  background: var(--surface-3); color: var(--fg-muted);
+}
+.chip-accent { background: var(--accent-soft); color: var(--accent-lift); }
+/* The chip on a report tile. Tinted with the accent and inked with the light
+   step of it, which is what clears AA against its own tinted pill -- the flat
+   accent on an accent tint does not. */
+.card-link .chip {
+  background: var(--accent-soft);
+  color: var(--accent-lift);
+}
+.card-link .chip::before { background: currentColor; }
+/* The analysis tile is the one that is genuinely a call to action, so its chip
+   takes a stronger tint rather than a second hue. */
+.card-link .chip-accent {
+  background: rgb(229 100 29 / .26);
+  color: var(--accent-hover);
+}
+.chip-ok { background: var(--ok-bg); color: var(--ok); }
+.chip-warn { background: var(--warn-bg); color: var(--warn); }
+.chip-bad { background: var(--bad-bg); color: var(--bad); }
+.chip-info { background: var(--info-bg); color: var(--info); }
+/* A dot as well as a colour, so status is never carried by hue alone. */
+.chip::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; flex: none;
+}
+.chip-plain::before { display: none; }
+
+/* ========================================================== notices */
+.notice {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius);
+  border-inline-start: 3px solid var(--info);
+  background: var(--info-bg); color: var(--fg);
+  font-size: var(--text-base); line-height: var(--leading);
+}
+.notice-bad { border-inline-start-color: var(--bad); background: var(--bad-bg); color: var(--bad); }
+.notice-ok { border-inline-start-color: var(--ok); background: var(--ok-bg); }
+.notice-warn { border-inline-start-color: var(--warn); background: var(--warn-bg); }
+
+/* =========================================================== tables
+   Vertical rules as well as horizontal, a header a clear step lighter than
+   the rows, and a sticky first column. Horizontal rules alone turn a wide
+   Persian table into bands of text with nothing separating one column from
+   the next. */
+/* 16px in a field is not a taste, it is the iOS threshold.
+   Below it, Safari zooms the whole page in when the field takes focus and does
+   NOT zoom back out when it loses it -- so tapping the search box leaves the
+   reader on a page wider than the screen, panning sideways to find what they
+   were reading. Every field in this application was 14.5px, which is to say
+   every field did this: the sign-in form, the search box, every filter on the
+   report builder.
+
+   any-pointer, not pointer. `pointer: coarse` asks what the PRIMARY pointer
+   is, and an iPad with a Magic Keyboard answers "fine" -- while still being
+   iOS Safari, which still zooms. `any-pointer: coarse` is true when a touch
+   screen is present at all, which is the condition that actually matters
+   here. A desktop with no touch screen keeps the smaller text the rest of the
+   design is set in. */
+@media (any-pointer: coarse) {
+  .input, .select, textarea.input { font-size: 16px; }
+}
+
+.table-scroll { overflow: auto; max-height: 64vh; overscroll-behavior: contain; }
+table.data { border-collapse: separate; border-spacing: 0; width: 100%; }
+table.data thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--surface-3);
+  border-bottom: 2px solid var(--accent);
+  border-inline-end: 1px solid var(--line);
+  padding: 11px 13px;
+  font: 650 var(--text-sm)/1.4 var(--font);
+  color: var(--fg); text-align: center; white-space: nowrap;
+}
+table.data thead th:last-child { border-inline-end: 0; }
+table.data tbody td {
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--line-soft);
+  border-inline-end: 1px solid var(--line-soft);
+  font-size: var(--text-base);
+  /* Wrapped onto more lines rather than clipped at one.
+     This was "overflow:hidden; text-overflow:ellipsis; white-space:nowrap",
+     which hid the end of anything long -- and several columns here are
+     GROUP_CONCAT roll-ups, so one cell legitimately reads
+     "A - A - B - B - ..." across seventeen entries. An ellipsis on
+     those is not a tidier cell, it is a cell whose content cannot be read at
+     all. The row grows to fit instead; the cap is on the wrapper below.
+     anywhere, not break-word: an HS-code list or a dimension string can be a
+     single token longer than the column, and break-word leaves that one
+     overflowing while wrapping everything else. */
+  max-width: 310px; white-space: normal; overflow-wrap: anywhere;
+  text-align: center; vertical-align: middle;
+}
+/* The cap, on a wrapper rather than the cell: a line clamp needs
+   display:-webkit-box, and setting that on a <td> takes it out of the table
+   layout altogether -- the column widths collapse. Four lines is enough for
+   the roll-ups measured here and stops one enormous cell making a row forty
+   lines tall; the full value stays in the cell's title attribute. */
+table.data tbody td > .cw {
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4; line-clamp: 4;
+  overflow: hidden;
+}
+/* Figures and the row marker are short and read better on one line. */
+table.data tbody td.num, table.data tbody td.rownum { white-space: nowrap; }
+table.data tbody td.num > .cw, table.data tbody td.rownum > .cw {
+  display: inline; -webkit-line-clamp: none; line-clamp: none;
+}
+/* A heading inside a widget, below its own h2: the inbox has two lists in one
+   panel and they need naming without either reading as a new section. */
+.subhead {
+  margin: var(--s4) 0 var(--s2);
+  font: 650 var(--text-base)/1.5 var(--font);
+  color: var(--fg);
+}
+.subhead:first-child { margin-top: 0; }
+table.data tbody td:last-child { border-inline-end: 0; }
+table.data tbody tr:nth-child(even) { background: rgb(255 255 255 / .018); }
+table.data tbody tr:hover td { background: var(--accent-soft); }
+/* Cells mix Persian and Latin; letting each resolve its own direction stops a
+   Latin code inside a Persian sentence from jumping to the wrong end. */
+table.data td, table.data th { unicode-bidi: plaintext; }
+/* Figures stay right-aligned even in a centred table: lining digits up down
+   the column is the entire reason they are set in tabular figures. */
+/* Centred throughout, including figures. Right-aligning numbers lines their
+   digits up, which is better for scanning a column of amounts -- but this
+   table mixes short codes, Persian names and figures in no fixed order, and
+   one alignment reads as a grid where two read as a mistake. */
+table.data td.num { font-variant-numeric: tabular-nums; text-align: center; }
+/* The sort control fills its heading, so it centres with it. */
+table.data thead th .sortbtn { justify-content: center; }
+/* The row number is the reader's place-marker in a wide table, so it stays
+   put while the rest scrolls sideways. */
+table.data .rownum {
+  width: 1%; text-align: center; color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  position: sticky; inset-inline-start: 0; z-index: 1;
+  background: var(--surface); border-inline-end: 1px solid var(--line);
+}
+/* The sticky row-number column has to repeat the zebra itself: it is pulled
+   out of the row's own background by position:sticky, so without this the
+   stripes stop at its edge. A tint rather than a second colour, so it follows
+   the surface tokens. */
+table.data tbody tr:nth-child(even) .rownum { background: var(--surface-2); }
+table.data tbody tr:hover .rownum { background: var(--surface-3); }
+table.data thead .rownum { background: var(--surface-3); z-index: 3; }
+/* The «جمع» row a report asks for with "-- total:". Set like the heading --
+   the same surface, an accent rule on the side facing the rows -- so it reads
+   as the table's summary rather than one more account, and held at the foot
+   of the scroll box so the total stays in view down a long list. */
+table.data tfoot td {
+  position: sticky; bottom: 0; z-index: 2;
+  background: var(--surface-3);
+  border-top: 2px solid var(--accent);
+  border-inline-end: 1px solid var(--line);
+  padding: 11px 13px;
+  font: 700 var(--text-base)/1.4 var(--font);
+  color: var(--fg); text-align: center; white-space: nowrap;
+}
+table.data tfoot td:last-child { border-inline-end: 0; }
+table.data tfoot .rownum { z-index: 3; color: var(--fg); background: var(--surface-3); }
+
+/* ======================================================== widgets
+   The card every report, analysis section and criteria panel sits in, plus
+   the two inline messages that go inside one.
+
+   These lived only in dashboard.html's own <style>, so the evaluation page --
+   which uses .widget, .note and .err at top level -- rendered its first paint
+   and every error box as unstyled 14px text. Defined here they are shared by
+   every page that links this file. Dashboard keeps its own copies, which win
+   by document order and are equivalent; this is the floor, not an override. */
+.widget {
+  background: var(--surface); border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl); overflow: hidden; box-shadow: var(--shadow);
+}
+.widget > h2 {
+  margin: 0; padding: 13px var(--s4);
+  font-size: var(--text-md); font-weight: 650;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.widget > h2 .spacer { margin-inline-start: auto; }
+
+/* A quiet line: "loading", "nothing matched", a footnote under a figure.
+   Deliberately typography only -- no padding and no centring. The evaluation
+   page uses .note for both standalone placeholders and explanatory paragraphs
+   inside cards, and dashboard.html's centred, padded version would push those
+   paragraphs into the middle of the card. Pages that want a centred
+   placeholder say so themselves; dashboard already does. */
+.note {
+  color: var(--fg-muted); font-size: var(--text-base); line-height: var(--leading);
+}
+
+/* An error, unlike a note, is a box: it has to be findable without reading it. */
+/* The ink, not the accent: --bad on --bad-bg measured 2.8:1 on the surface
+   (Lighthouse, 2026-09-23); --bad-ink, which exists for text on --bad-bg,
+   is 4.9:1. */
+.err {
+  padding: 13px var(--s4); background: var(--bad-bg); color: var(--bad-ink);
+  font-size: var(--text-base); line-height: var(--leading);
+}
+
+/* ============================================================ loading
+   The AI-style loader: one ring carrying a blue-to-purple conic gradient, a
+   brighter comet head and tail sweeping around it, a blurred halo, and seven
+   particles orbiting at seven different speeds.
+
+   Pure CSS and SVG. No JavaScript drives the animation and no image is
+   fetched, so it paints before any script runs -- which is the point, since
+   one of the things it covers is the wait for that script.
+
+   Sized from --ld-size on the element itself or any ancestor, via
+   var(--ld-size, 120px): defining the fallback inline rather than setting the
+   property on .ld is what lets an ancestor override it. A candidate that
+   hard-set --ld-s on its own root could not be resized at all.
+
+   The rotations sit on <svg> roots and HTML elements rather than SVG <g>
+   children, because Blink does not give an SVG child its own compositor
+   layer -- so the blurred tail would be re-rasterized every frame. */
+.ld-w { display: grid; place-items: center; padding: .12em; }
+
+/* The loader itself is the .orbit component in uiverse.css. This block is the
+   adapter: it keeps the --ld-size contract every call site already uses -- the
+   overlay asks for 118px, an inline wait for 64 -- and turns that into the one
+   font-size the orbit scales from. The orbit is 13em across, so the divisor is
+   13 and nothing else needs to know that.
+   What used to be here drew a conic ring with a blurred comet tail in blues
+   and violets. It is gone rather than kept alongside: two loading animations
+   in one application is one too many, and those colours were never part of
+   this palette. */
+.ld {
+  font-size: calc(var(--ld-size, 120px) / 13);
+  position: relative; display: grid; place-items: center;
+  width: 13em; height: 13em;
+}
+.ld .orbit { font-size: inherit; }
+
+/* The blocking overlay. The component itself only paints a disc under the
+   ring, so the dark ground for a full-screen wait comes from here. */
+.ld-over {
+  position: fixed; inset: 0; z-index: var(--z-toast);
+  display: grid; place-items: center;
+  background: rgb(7 11 20 / .88);
+  --ld-size: min(118px, 30vw);
+}
+.ld-over[hidden] { display: none; }
+/* An inline wait, inside a panel that is already on screen. */
+.ld-inline { --ld-size: 64px; padding-block: var(--s6); }
+
+/* ============================================================== icons
+   One Lucide sprite, inlined into every page, referenced as
+   <svg class="ic"><use href="#i-name"/></svg>.
+
+   The symbols carry their own fill and stroke, because a <use> clones the
+   symbol into the host document and inherits from there rather than from the
+   sprite it came from -- attributes left on the sprite root are lost and the
+   icon renders as a black filled silhouette. So this rule only has to settle
+   size and colour.
+
+   The contextual sizes further up (.btn .ic, .empty .ic, .navsheet .ic,
+   .toast .ic) are more specific and still win where they apply. */
+.ic { width: 16px; height: 16px; flex: none; color: inherit; vertical-align: -.15em; }
+.ic-lg { width: 22px; height: 22px; }
+.ic-xl { width: 30px; height: 30px; }
+
+/* An arrow that means "onward" points the other way in a right-to-left page.
+   Applied by class rather than to every icon, because most icons must NOT be
+   mirrored -- a magnifier, a clock or a logo flipped horizontally just looks
+   broken. */
+[dir="rtl"] .ic-mirror { transform: scaleX(-1); }
+
+/* ============================================================ toast
+   Lived in ui.html's own <style>, so the four Persian pages had no toast at
+   all and the evaluation page fell back to a native alert() -- an OS dialog
+   captioned with the server's address, in the middle of a Persian demo.
+
+   inset-inline-end rather than right, so it sits in the same visual corner on
+   the LTR document browser and the RTL Persian pages. */
+.toast {
+  position: fixed; inset-inline-end: var(--s4); bottom: var(--s4); z-index: var(--z-toast);
+  display: flex; align-items: center; gap: var(--s3);
+  max-width: 340px; padding: 13px var(--s4);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  font-size: var(--text-base); color: var(--fg);
+}
+.toast .ic {
+  flex: none; display: grid; place-items: center;
+  width: 26px; height: 26px; border-radius: var(--radius-sm);
+}
+.toast .ic svg { width: 15px; height: 15px; }
+.toast-ok .ic { background: var(--ok-bg); color: var(--ok); }
+.toast-bad .ic { background: var(--bad-bg); color: var(--bad); }
+.toast-info .ic { background: var(--info-bg); color: var(--info); }
+/* Two classes, deliberately, and not for tidiness.
+   A toast is built as `class="toast rise toast-ok"`, and .rise -- which sets its
+   own `animation` -- is declared LOWER in this file. As a single class this rule
+   lost to it on source order, so adding .toast-leave changed nothing: the
+   toastLeave animation never ran, its animationend never fired, and the handler
+   that removes the element on animationend never ran either.
+
+   The toast stayed on screen for ever. That is exactly what was reported, and
+   the four-second timer was firing correctly the whole time -- it was the
+   removal that never happened.
+
+   .toast.toast-leave is two classes, so it wins wherever it sits in the file. */
+.toast.toast-leave { animation: toastLeave .15s ease-in forwards; }
+@keyframes toastLeave { to { opacity: 0; transform: translateY(4px) scale(.98); } }
+
+/* ============================================ "a new version is ready" bar
+
+   Raised by nav.js when a newly deployed service worker takes over a page
+   that is already open -- old HTML, new worker. See the comment there for why
+   that state exists and what it once cost.
+
+   Centred rather than cornered, and without a transform to do it: .rise ends
+   on `transform: none`, so a translateX(-50%) would be wiped the instant the
+   entry animation finished and the bar would jump to the middle-right. So
+   inset-inline: 0 with an auto margin, which is also direction-agnostic and
+   therefore sits in the same place on the LTR document browser and the RTL
+   Persian pages.
+
+   Above the toast, because it is the one notice that explains why the rest of
+   the page may be behaving strangely. */
+.swbar {
+  position: fixed; inset-inline: 0; margin-inline: auto; width: fit-content;
+  max-width: calc(100% - 2 * var(--s4));
+  bottom: max(var(--s4), env(safe-area-inset-bottom));
+  z-index: calc(var(--z-toast) + 1);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3);
+  padding: 11px var(--s4);
+  background: var(--surface); border: 1px solid var(--accent);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  font-size: var(--text-base); color: var(--fg);
+}
+/* The sentence holds the line to itself on a narrow screen, so the two
+   buttons wrap together underneath it rather than one of them being orphaned
+   on a line of its own. */
+.swbar-text { flex: 1 1 100%; }
+@media (min-width: 480px) { .swbar-text { flex: 0 1 auto; } }
+
+/* ===================================================== empty states */
+.empty {
+  display: grid; place-items: center; gap: var(--s2);
+  padding: var(--s10) var(--s5); text-align: center;
+  color: var(--fg-muted); font-size: var(--text-base);
+}
+.empty .ic { width: 34px; height: 34px; color: var(--line); }
+.empty b { display: block; color: var(--fg); font-size: var(--text-md); font-weight: 650; }
+
+/* Skeletons rather than a spinner: a spinner says "wait", a skeleton says "a
+   table is coming and roughly this big", which makes the same wait read as
+   shorter. */
+.skel { display: grid; gap: 9px; padding: var(--s4); }
+.skel i {
+  display: block; height: 13px; border-radius: 6px;
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
+  background-size: 200% 100%;
+  animation: sheen 1.25s linear infinite;
+}
+@keyframes sheen { to { background-position: -200% 0; } }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(1turn); } }
+
+/* ========================================================= motion
+   Small and functional: a lift where a click is coming, an entrance where
+   content actually just appeared. Nothing moves only to move -- somebody
+   re-reading the same invoice for the third time today should not be
+   watching it. */
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise .2s var(--ease) backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ========================================================== layout */
+.row { display: flex; align-items: center; gap: var(--s2); }
+.col { display: flex; flex-direction: column; }
+.grow { flex: 1; min-width: 0; }
+.hidden { display: none !important; }
+.wrap { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+/* The application shell: a sticky bar over a full-height body. */
+/* The bar sits over scrolling content, which is exactly where the frost has
+   something to do. */
+.appbar {
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  /* The bar spans the window; its CONTENTS line up with the page's content.
+     The offset is computed from --page-max, which each page sets to whichever
+     content width it uses, rather than wrapping every header in another div --
+     there are five of them and they would drift. They did drift: this was
+     hardcoded to 1500 while three of the five pages were narrower than that.
+     max() keeps the normal gutter on narrow screens, where the calc goes
+     negative. */
+  padding-block: 10px; padding-top: max(10px, env(safe-area-inset-top));
+  padding-inline: max(var(--s4), calc((100% - var(--page-max)) / 2 + var(--s4)));
+  /* Its height from the first paint. The buttons in it are put there by
+     nav.js, after the page has painted, and until then the bar was its
+     padding alone: every page dropped by 44px when they arrived -- the
+     largest layout shift measured on the home page on a phone. */
+  min-height: calc(max(10px, env(safe-area-inset-top)) + 44px + 10px);
+  background: rgb(20 47 64 / .9);
+  border-bottom: 1px solid var(--line-soft);
+}
+/* Destinations as a group, so the gap between them is theirs and not the
+   bar's, and so they collapse into the sheet as one unit on a phone. */
+.navlinks { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+/* The current page is marked for everyone, not only for a screen reader:
+   aria-current carries it to assistive technology, and this draws the same
+   fact for people who can see it. Never colour alone -- there is a rule under
+   it too. */
+.appbar .navhere, .appbar [aria-current="page"] {
+  color: var(--fg) !important;
+  background: var(--accent-soft) !important;
+  box-shadow: inset 0 -2px 0 var(--accent);
+  font-weight: 700;
+}
+.who { font-size: var(--text-base); color: var(--fg-muted); }
+
+/* Skip link: off-screen until focused, then a normal button at the top of the
+   page. Not display:none, which would take it out of the tab order and defeat
+   the point of having it. */
+.skip {
+  position: absolute; inset-inline-start: -9999px; top: 0; z-index: calc(var(--z-toast) + 1);
+  padding: 12px 18px; border-radius: 0 0 var(--radius) 0;
+  background: var(--accent); color: var(--accent-ink);
+  font-weight: 700; text-decoration: none;
+}
+.skip:focus { inset-inline-start: 0; }
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .appbar {
+    background: rgb(20 47 64 / .68);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+}
+/* The mark and the page name are no longer in the header on any page -- see
+   the note on .appbar. .brand-name survives because the drawer still has a
+   title of its own. */
+.brand-name {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: var(--text-lg); letter-spacing: -.01em;
+}
+
+/* Said, not shown.
+   ---------------
+   For the page's own heading. The name of the page left the header, and an
+   <h1> is not decoration: it is what a screen reader announces on arrival and
+   what the document outline is built from, so removing the last one from a
+   page would take something away that nothing on screen was providing.
+   The clip-path form rather than display:none or visibility:hidden, both of
+   which take the element out of the accessibility tree as well -- which is
+   the one thing this must not do. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+.appbar a:not(.btn), .appbar .navlink {
+  padding: 7px 10px; border-radius: var(--radius);
+  color: var(--fg-muted); font-size: var(--text-base);
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.appbar a:not(.brand):not(.btn):hover, .appbar .navlink:hover {
+  background: var(--surface-2); color: var(--fg); text-decoration: none;
+}
+.appbar .navlink.on { background: var(--surface-2); color: var(--fg); }
+
+/* Stuck under the header, so the way back is reachable from anywhere in a long
+   report without scrolling to the top first.
+   The offset is the measured height of the appbar, published as --appbar-h by
+   nav.js: the bar wraps to two rows on a narrow screen, so a hard-coded offset
+   would leave the crumb either overlapping it or floating below a gap. The
+   fallback is the one-row height, which is what it is on a desktop.
+   z-index one below the appbar's, so it slides under the bar rather than over
+   it, and it carries the bar's own background because the page scrolls
+   underneath it. */
+.crumb { display: flex; align-items: center; gap: 9px; font-size: var(--text-base); color: var(--fg-muted);
+         flex-wrap: wrap;
+         position: sticky; top: var(--appbar-h, 56px); z-index: calc(var(--z-sticky) - 1);
+         padding-block: 8px;
+         background: rgb(20 47 64 / .92); }
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .crumb { background: rgb(20 47 64 / .72);
+           -webkit-backdrop-filter: blur(18px) saturate(180%);
+           backdrop-filter: blur(18px) saturate(180%); }
+}
+/* The way back, as a control rather than a line of text. 44px tall because
+   that is the smallest target a thumb hits reliably, and on a long report this
+   is the button somebody reaches for without looking. */
+.btn-back {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 44px;
+  padding-inline: 14px 16px; text-decoration: none; font-weight: 700;
+  /* Orange, the accent this application already uses for the one action on a
+     screen worth finding without looking for it. Dark ink on it rather than
+     white: white on this orange measures about 2.4:1 and fails AA outright,
+     while the accent ink is near 9:1. */
+  background: var(--accent); color: var(--accent-ink);
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, #000);
+  border-radius: var(--radius, 10px);
+}
+.btn-back svg { width: 16px; height: 16px; flex: none; }
+.btn-back:hover {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--accent) 86%, #fff);
+  color: var(--accent-ink);
+}
+.btn-back:active { background: color-mix(in srgb, var(--accent) 88%, #000); }
+/* Visible against the orange, which the default focus ring is not. */
+.btn-back:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+/* Back to the top. Fixed at the bottom-right corner on every page, clear of
+   the iPhone home indicator via the safe-area inset. */
+.totop {
+  position: fixed; z-index: 60;
+  inset-block-end: calc(18px + env(safe-area-inset-bottom, 0px));
+  /* Physical right, not inset-inline-end: this page is RTL, so the logical end
+     is the left edge, and "bottom right" was asked for. */
+  right: 18px; left: auto;
+  width: 48px; height: 48px; padding: 0;
+  display: grid; place-items: center;
+  border-radius: 999px; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink);
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, #000);
+  box-shadow: 0 6px 20px rgb(0 0 0 / .45);
+  /* Hidden until there is something to scroll back from. visibility, not
+     display, so the transition has something to animate; pointer-events off
+     so the invisible button cannot swallow a click on the page beneath it. */
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity .18s ease, transform .18s ease, visibility .18s;
+}
+.totop.on { opacity: 1; visibility: visible; pointer-events: auto; transform: none; }
+.totop:hover { background: color-mix(in srgb, var(--accent) 86%, #fff); }
+.totop:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+/* The sprite has no "up" arrow, so the right-pointing one is turned. */
+.totop svg { width: 22px; height: 22px; transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .totop { transition: none; transform: none; }
+}
+
+/* On the pages whose <main> is replaced wholesale, the crumb lives outside it
+   and needs the page's own gutter. */
+.crumb-page { max-width: var(--page-max); margin: 0 auto 12px; padding-inline: var(--s4, 16px); }
+
+/* Cards laid out as a responsive grid, for the report list and similar. */
+.cards { display: grid; gap: 13px; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
+/* The report tiles are glass: they are the one place in the app that is a
+   gallery of floating objects rather than a document, and the frost gives
+   them a depth that a flat fill on a flat background cannot. */
+.card-link {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 17px 18px;
+  background: rgb(24 34 58 / .72);
+  border: 1px solid rgb(255 255 255 / .07);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgb(255 255 255 / .05);
+  color: inherit; text-decoration: none; cursor: pointer;
+  transition: border-color var(--normal) var(--ease), transform var(--normal) var(--ease),
+              box-shadow var(--normal) var(--ease), background var(--normal) var(--ease);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .card-link {
+    background: rgb(24 34 58 / .5);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    backdrop-filter: blur(18px) saturate(180%);
+  }
+  /* The refracting rim, as on .glass: the edge is where the material is
+     thickest, so it is where what lies behind it bends. */
+  .card-link {
+    box-shadow:
+      var(--shadow-sm),
+      inset 0 1px 0 rgb(255 255 255 / .07),
+      inset 0 -1px 0 rgb(0 0 0 / .2);
+  }
+}
+/* Light along the top edge, strongest at the leading corner. */
+.card-link::after {
+  content: ''; position: absolute; inset: 0; z-index: 0;
+  border-radius: inherit; pointer-events: none;
+  background:
+    linear-gradient(to left,
+      rgb(255 255 255 / .26), rgb(255 255 255 / .06) 45%, transparent 80%)
+      top / 100% 1px no-repeat,
+    radial-gradient(130% 90% at 100% 0%, rgb(255 255 255 / .06), transparent 62%);
+  transition: opacity var(--normal) var(--ease);
+}
+.card-link > * { position: relative; z-index: 1; }
+.card-link:hover::after { opacity: .75; }
+/* A thin brand rule on the leading edge, revealed on hover: enough of a cue
+   that the card is a target without repainting the whole tile. */
+.card-link::before {
+  content: ''; position: absolute; z-index: 1;
+  inset-block: 14px; inset-inline-start: 0; width: 3px;
+  background: var(--accent); border-radius: 0 3px 3px 0;
+  opacity: 0; transition: opacity var(--normal) var(--ease);
+}
+.card-link:hover, .card-link:focus-visible {
+  border-color: rgb(255 255 255 / .14);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow), inset 0 1px 0 rgb(255 255 255 / .07);
+  text-decoration: none;
+}
+.card-link:hover::before, .card-link:focus-visible::before { opacity: 1; }
+.card-link .t { font-size: 15px; font-weight: 650; }
+.card-link .d { font-size: var(--text-sm); color: var(--fg-muted); line-height: 1.65; }
+.card-link .m { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: var(--text-xs); color: var(--fg-muted); }
+
+/* ==================================================== the navigation drawer
+
+   One navigation, at every width.
+
+   It began as a phone accommodation: the toolbar could not hold a brand, a
+   search field, a refresh button, three destinations, a user name and a
+   sign-out control without wrapping into four cramped rows, so on a phone the
+   destinations collapsed behind a button and opened as a sheet.
+
+   It is now the only navigation, because the split version had two faults that
+   got worse as the application grew. The menu somebody learned on a desktop
+   was not the menu they found on their phone. And the desktop row could only
+   ever carry names, while the sheet gives every destination a line saying what
+   is there -- which is the difference between a menu that answers "where do I
+   go" and one that makes people guess. There are now eight destinations, and
+   eight names in a row is not a toolbar.
+
+   The button carries the word as well as the bars. An icon on its own is a
+   guess, and this is the only way to anywhere. */
+/* The control itself is defined ONCE, here, and that is the fix for how it
+   looked rather than a tidy-up.
+
+   It was defined twice -- a pill here and, in uiverse.css, a 40x40 icon-only
+   square with `flex-direction: column`. uiverse.css is concatenated after this
+   file, so the square won: the word ended up stacked underneath a cramped
+   stack of bars in a box too narrow for it, which is exactly what it looked
+   like. Two stylesheets describing one control is the bug; the rules that were
+   in uiverse.css now describe the icon INSIDE this button and live here with
+   it.
+
+   A pill with the word and the bars side by side. The word first, which in a
+   right-to-left page puts it on the right and the bars on the left, nearest
+   the screen edge the drawer comes from. */
+.navtoggle {
+  display: inline-flex; flex-direction: row; align-items: center; gap: 9px;
+  height: 38px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: var(--radius-full);
+  background: var(--surface-2); color: var(--fg);
+  font: inherit; font-size: var(--text-sm); font-weight: 650; line-height: 1;
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.navtoggle:hover { background: var(--surface-3); border-color: var(--accent); }
+.navtoggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.navtoggle-label { display: block; }
+
+/* The button belongs on the physical right, because that is the side the
+   drawer comes from -- pressing it should move the panel out from under your
+   own finger rather than across the screen.
+   It is prepended to the bar, which puts it at the right in a right-to-left
+   page and needs no help. The document browser's toolbar is left-to-right on
+   purpose, though, and there the same markup put the button on the left with
+   the drawer still opening on the right. Reordering rather than moving it in
+   the DOM, so the tab order still reaches it first: it is the first thing in
+   the bar either way. */
+[dir="ltr"] .appbar .navtoggle { order: 100; }
+
+/* The icon: a fixed box so the three bars have somewhere definite to rotate
+   about. Its height is what the cross animation's translate distances are
+   measured against, so the two are stated together. */
+.navtoggle .bars {
+  position: relative; flex: none;
+  width: 17px; height: 13px;
+}
+.navtoggle .bar {
+  position: absolute; inset-inline: 0; height: 2.5px;
+  /* The brand orange, not the interface accent. This button sits immediately
+     beside the logo, and the two reading as one mark is the point; a tan
+     hamburger next to an orange logo is two warm colours arguing. */
+  border-radius: 2px; background: var(--brand);
+  transition: transform var(--normal) var(--ease), opacity var(--fast) var(--ease),
+              width var(--normal) var(--ease);
+}
+/* Middle bar shorter, which is the one flourish worth keeping from the version
+   this replaces: it makes a 17px glyph look drawn rather than generated. */
+.navtoggle .bar:nth-child(1) { top: 0; }
+.navtoggle .bar:nth-child(2) { top: 5.25px; width: 72%; }
+.navtoggle .bar:nth-child(3) { top: 10.5px; }
+
+/* Open, the bars become a cross. The button is also the close control while
+   the drawer is up, and a hamburger that stays a hamburger gives the reader no
+   sign that pressing it again undoes what it just did.
+
+   Driven from aria-expanded rather than from the body class, so the animation
+   cannot disagree with what assistive technology is being told. 5.25px is half
+   the 10.5px gap between the outer bars, which is what lands them both on the
+   centre line. */
+.navtoggle[aria-expanded="true"] .bar:nth-child(1) { transform: translateY(5.25px) rotate(45deg); }
+.navtoggle[aria-expanded="true"] .bar:nth-child(2) { opacity: 0; width: 0; }
+.navtoggle[aria-expanded="true"] .bar:nth-child(3) { transform: translateY(-5.25px) rotate(-45deg); }
+
+/* On a narrow phone the word goes and the bars stay: at 380px the bar needs
+   every pixel, and by then the button is the only thing in that corner.
+   It squares up to 44 rather than shrinking to its icon -- it is the only way
+   to anywhere on the phone, so it is the last control that should be hard to
+   hit. Measured at 38x38 before this. */
+@media (max-width: 420px) {
+  .navtoggle { width: 44px; height: 44px; padding: 0; justify-content: center; }
+  .navtoggle-label { display: none; }
+}
+/* And on any touch device, whatever the width. */
+@media (pointer: coarse) {
+  .navtoggle { height: 44px; }
+}
+
+.navsheet {
+  position: fixed; inset-block: 0; right: 0; z-index: var(--z-drawer);
+  /* One number for the drawer's width and for the space the page gives up to
+     it when pinned -- see the pinned block below. Two numbers drifted once
+     and a 380px drawer covered 40px of every page. */
+  width: var(--nav-w);
+  display: flex; flex-direction: column;
+  padding: var(--s4);
+  padding-top: max(var(--s4), env(safe-area-inset-top));
+  background: rgb(27 58 77 / .96);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  /* Anchored to the PHYSICAL right, not the trailing edge, and travelling out
+     to the physical right when closed.
+
+     Logical properties would be the usual choice and are wrong here. The
+     drawer has to be on the right on every page, and this application has
+     pages in both directions -- the Persian screens are right-to-left and the
+     document browser is left-to-right on purpose -- so inset-inline-end would
+     put the menu on the left on some of them and the right on others. "The
+     menu is on the right" is a fact about this interface, so it is stated
+     physically.
+
+     It is also the side the button that summons it is on: the toggle is the
+     first thing in the bar, which in a right-to-left page is the top-right
+     corner. */
+  transform: translateX(102%);
+  /* Slower than the rest of the interface, and eased out of rather than into.
+     A full-height panel travelling the width of itself reads as abrupt at the
+     120ms the small controls use; 260ms on a decelerating curve is the
+     difference between a panel that arrives and one that appears. The scrim
+     fades on the same clock so the two read as one movement. */
+  transition: transform .26s cubic-bezier(.22, 1, .36, 1);
+  overflow-y: auto;
+  /* Room for the home indicator on a phone, and for the notch when the drawer
+     runs under it. */
+  padding-bottom: max(var(--s4), env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+}
+/* Wider where there is room: eight destinations each with a line of
+   description is a column of text, and 340px sets it too narrow on a desktop
+   to read as one. */
+:root { --nav-w: min(86%, 340px); }
+@media (min-width: 900px) { :root { --nav-w: 380px; } }
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .navsheet {
+    background: rgb(27 58 77 / .82);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+  }
+}
+body.menu-open .navsheet { transform: none; }
+body.menu-open { overflow: hidden; }     /* the page must not scroll behind it */
+
+/* ---------------------------------------------------------------- pinned
+   The drawer, kept open.
+   ----------------------
+   A sheet is right for a phone and wrong for somebody working at a desk all
+   day: they know where they are going, and a menu that has to be summoned and
+   dismissed for every move is two presses per navigation. Pinned, the drawer
+   becomes a permanent column and the page makes room for it.
+
+   The width is a variable rather than repeated, because the drawer's width and
+   the space the page gives up must be the same number. They were not, once:
+   a 380px drawer over a 340px gutter covered 40px of every page.
+
+   Only above 1100px, and only where the PRIMARY pointer is fine -- a mouse or
+   a trackpad. Below 1100px the drawer is most of the screen, so pinning it
+   would cover the page rather than sit beside it. A tablet in your hand is
+   excluded because "wide enough" is not "a desk": an iPad in landscape is
+   1366px, and a pinned 380px column there is the phone problem at a larger
+   size. It used to be excluded as (any-pointer: coarse), which also caught
+   every touch-screen LAPTOP -- they have a touch screen, so any pointer is
+   coarse -- and gave them the phone's dock instead of the menu button. The
+   primary pointer tells the two apart: fine on a laptop, coarse on a tablet.
+   This gate is also what makes hiding the pin control safe (.navpin, below,
+   asks the same question): a tablet that remembered a pin from a desktop
+   session must not get the pinned layout -- drawer forced open, toggle and
+   close hidden -- with no pin button left to unpin it. */
+@media (min-width: 1100px) and (pointer: fine) {
+  body.nav-pinned .navsheet {
+    transform: none;
+    /* No shadow and no blur: it is part of the page now, not floating over
+       it, and the only thing separating the two is the border. */
+    box-shadow: none;
+  }
+  body.nav-pinned .navscrim { display: none; }
+  /* Physical, to match the drawer's own physical anchoring -- see .navsheet.
+     padding rather than margin so the sticky header is inset too; with a
+     margin the bar kept the full window width and ran under the drawer. */
+  body.nav-pinned { padding-right: var(--nav-w); }
+  /* Pinned, the toggle has nothing to toggle and the close button would
+     close something the reader asked to keep. The pin itself is the way out. */
+  body.nav-pinned .navtoggle,
+  body.nav-pinned .navsheet [data-close] { display: none; }
+}
+.navpin {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; flex: none; padding: 0;
+  border: 1px solid transparent; border-radius: var(--radius);
+  background: none; color: var(--fg-muted); cursor: pointer;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+/* Pinning is a desktop-with-a-mouse idea. Offering the control anywhere it does
+   nothing is worse than not offering it, so it is hidden below 1100px and on
+   any touch device -- which covers the iPad in landscape, where the width test
+   alone would let it through.
+
+   AFTER the rule above, and that is the entire point of where these sit.
+   A media query carries no extra specificity: `@media (...) { .navpin { display:
+   none } }` and `.navpin { display: inline-flex }` are both one class, so the
+   later one in the file wins. These two blocks used to come FIRST, which meant
+   the base rule overrode them and the pin was never hidden -- not on a phone,
+   not at any width, not once, despite a comment here claiming otherwise. It was
+   reported as "the pin still shows on mobile" and it had never not shown.
+
+   This is the fourth time this file has been bitten by source order (see the
+   notes beside .btn-sm and .um-btn). If a rule here is meant to override
+   another, it goes below it or it does nothing. */
+@media (max-width: 1099px) {
+  .navpin { display: none; }
+}
+/* The primary pointer, as the pinned layout itself asks (pointer: fine): a
+   touch-screen LAPTOP has a touch screen, so any-pointer was coarse there,
+   and the pin -- and with it the whole desk layout -- was refused to a
+   machine with a trackpad and a keyboard. The two must agree, or a pinned
+   drawer could be left with no pin to unpin it. */
+@media (pointer: coarse) {
+  .navpin { display: none; }
+}
+.navpin:hover { background: var(--surface-2); color: var(--fg); }
+.navpin:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Pressed reads as pressed: the tint says "this is on" and the icon turns
+   the accent, so the state does not rest on the icon's rotation alone. */
+.navpin[aria-pressed="true"] {
+  background: var(--accent-soft); color: var(--accent-lift);
+  border-color: rgb(229 100 29 / .34);
+}
+.navpin .ic { width: 17px; height: 17px; }
+
+.navsheet-head {
+  display: flex; align-items: center; gap: var(--s3);
+  padding-bottom: var(--s4); margin-bottom: var(--s2);
+  border-bottom: 1px solid var(--line-soft);
+}
+/* Each destination gets its name and a line saying what is there, so the menu
+   answers "where do I go" rather than only listing words. */
+.navsheet a.dest {
+  display: block; padding: 13px var(--s3); border-radius: var(--radius-lg);
+  color: var(--fg); text-decoration: none;
+  transition: background var(--fast) var(--ease);
+}
+.navsheet a.dest:hover, .navsheet a.dest:focus-visible { background: var(--surface-2); text-decoration: none; }
+.navsheet a.dest.on { background: var(--accent-soft); }
+.navsheet a.dest .t { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; }
+.navsheet a.dest.on .t { color: var(--accent-lift); }
+.navsheet a.dest .d { margin-top: 2px; font-size: var(--text-sm); color: var(--fg-muted); }
+.navsheet .ic { width: 17px; height: 17px; flex: none; }
+
+/* ---- a category, and the destinations under it ----
+   Four headings over eleven places, because a flat list of eleven with a
+   sentence under each is a list people read twice and still miss things in.
+   A heading looks like a destination -- same size, same weight -- so the menu
+   reads as one list with structure rather than two kinds of thing. */
+.navgroup-head {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 13px var(--s3); border: 0; border-radius: var(--radius-lg);
+  background: none; color: var(--fg); font: inherit; text-align: start;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+.navgroup-head:hover, .navgroup-head:focus-visible { background: var(--surface-2); }
+.navgroup-head .t { flex: 1; min-width: 0; }
+.navgroup-head b { display: block; font-size: 15px; font-weight: 600; }
+.navgroup-head .d { display: block; margin-top: 2px; font-size: var(--text-sm); color: var(--fg-muted); }
+/* The chevron points along the reading direction when closed and turns down
+   when open. In a right-to-left page "forward" is leftward, which is why the
+   symbol is chevron-left rather than chevron-right. */
+.navgroup-head .ic:last-child { transition: transform var(--fast) var(--ease); color: var(--fg-faint); }
+.navgroup.open .navgroup-head .ic:last-child { transform: rotate(-90deg); }
+
+/* Closed by height rather than display:none, so opening animates.
+   THE LINKS ARE WRAPPED IN ONE INNER DIV, and that is not tidiness: the
+   0fr/1fr trick sizes GRID ROWS, so with each link as its own grid item only
+   the first row collapsed and the rest stayed at auto -- measured as a closed
+   group still occupying its full height, with a hole in the menu where the
+   hidden links were.
+   One child means one row, and one row is the row that collapses. */
+.navgroup-body {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows var(--fast) var(--ease);
+}
+.navgroup-body > div { overflow: hidden; }
+.navgroup.open .navgroup-body { grid-template-rows: 1fr; }
+/* A closed group's links leave the tab order as well as the screen. A
+   keyboard user walking through destinations they cannot see is the same
+   fault the sheet itself had when it used aria-hidden alone. */
+.navgroup:not(.open) .navgroup-body { visibility: hidden; }
+.navgroup.open .navgroup-body { visibility: visible; }
+/* Indented, so a child reads as belonging to the heading above it rather
+   than as another top-level entry. */
+.navgroup-body a.dest { margin-inline-start: var(--s4); }
+/* «سایت‌های پرکاربرد» (nav.js mountSites): the heading with its ＋ beside it,
+   each site with its ✕, and the two boxes that add one. The ✕ is faint until
+   its row is pointed at, so a list of sites does not read as a list of
+   delete buttons. */
+.navsites-row { display: flex; align-items: center; gap: 2px; }
+.navsites-row .navgroup-head { flex: 1; min-width: 0; }
+.navsites-add, .navsite-x { flex: none; }
+.navsite { display: flex; align-items: center; }
+.navsite a.dest { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.navsite-x { opacity: .45; }
+.navsite:hover .navsite-x, .navsite-x:focus-visible { opacity: 1; }
+.navsite-form { display: grid; gap: var(--s2); padding: var(--s2) var(--s3); margin-inline-start: var(--s4); }
+.navsite-acts { display: flex; gap: var(--s2); }
+.navsite-err { margin: 0; padding: 0 var(--s3); font-size: var(--text-sm); color: var(--bad-ink); }
+/* − beside every entry and ＋ at the foot of the list (nav.js mountMenuEdit):
+   a person's own menu, changed where it is. The − is faint until its row is
+   pointed at or reached by keyboard, like a site's ✕; with no hover to find
+   it on a touch screen it stays half-visible there. */
+.navrow { display: flex; align-items: center; gap: 2px; }
+.navrow a.dest { flex: 1; min-width: 0; }
+.nav-x, .nav-plus {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px;
+  border: 0; border-radius: 10px; background: none; cursor: pointer;
+  transition: opacity var(--fast) var(--ease), background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.nav-x { color: var(--fg-faint); opacity: .3; }
+.navrow:hover .nav-x, .navrow:focus-within .nav-x { opacity: 1; }
+.nav-x:hover { background: var(--bad-bg); color: var(--bad-ink); }
+.nav-plus { color: var(--accent-lift); }
+.nav-plus:hover { background: var(--accent-soft); }
+.nav-x:focus-visible, .nav-plus:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 2px; }
+.nav-x:disabled, .nav-plus:disabled { opacity: .3; cursor: progress; }
+.nav-x .ic, .nav-plus .ic { width: 15px; height: 15px; }
+@media (pointer: coarse) { .nav-x { opacity: .55; } }
+.navadd { margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line-soft); }
+.navadd-btn {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 11px var(--s3); border: 0; border-radius: var(--radius-lg);
+  background: none; color: var(--fg-muted); font: inherit; font-size: 14px; font-weight: 600;
+  text-align: start; cursor: pointer; transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.navadd-btn:hover, .navadd-btn[aria-expanded="true"] { background: var(--surface-2); color: var(--fg); }
+.navadd-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.navadd-body { display: grid; gap: 2px; padding: var(--s2) var(--s3) var(--s2) 0; margin-inline-start: var(--s4); }
+.navadd-here { display: grid; gap: 6px; padding-bottom: var(--s2); }
+.navadd-line { display: flex; gap: var(--s2); }
+.navadd-line .input { flex: 1; min-width: 0; }
+.navadd-item { display: flex; align-items: center; gap: var(--s2); min-height: 40px; }
+.navadd-item > span { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--fg-muted); }
+.navadd-none { margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .navgroup-body, .navgroup-head .ic:last-child { transition: none; }
+}
+
+.navsheet-foot { margin-top: auto; padding-top: var(--s4); border-top: 1px solid var(--line-soft); }
+/* The search at the head of the menu: filters the entries, Enter searches
+   everything through the palette. The box shows focus, since the field
+   inside it draws no outline of its own. */
+.navsearch {
+  display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s3);
+  padding: 0 var(--s3); border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.navsearch:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.navsearch .ic { width: 16px; height: 16px; color: var(--fg-muted); flex: none; }
+.navsearch input {
+  flex: 1; min-width: 0; border: 0; background: transparent; color: var(--fg);
+  font: inherit; padding: 9px 0; outline: none;
+}
+.navsearch-none { margin: 0 0 var(--s3); }
+
+.navscrim {
+  position: fixed; inset: 0; z-index: 39;
+  background: rgb(0 0 0 / .5);
+  /* Faded rather than switched on, so it arrives with the drawer instead of
+     appearing under it. visibility carries the not-there state, because
+     opacity alone would leave an invisible sheet of glass over the page
+     swallowing every press. */
+  opacity: 0; visibility: hidden;
+  transition: opacity .26s var(--ease), visibility .26s;
+}
+body.menu-open .navscrim { opacity: 1; visibility: visible; }
+
+/* ==================================================== touch targets */
+/* Everything the drawer carries comes out of the bar, at every width now --
+   see the note on .navtoggle. Anything a page marked as collapsing is a
+   destination list, and the drawer is where those live. */
+.appbar .collapses { display: none !important; }
+
+@media (max-width: 700px) {
+  /* 44px is the smallest reliably hittable size on a phone. */
+  .btn { padding: 11px 16px; }
+  .btn-sm { padding: 8px 12px; }
+  .appbar { padding: 9px var(--s3); gap: 7px; }
+  .appbar a:not(.brand):not(.btn), .appbar .navlink { padding: 9px 11px; }
+  .navlinks { gap: 0; }
+  .cards { grid-template-columns: 1fr; }
+  .table-scroll { max-height: none; }
+}
+
+/* Every control a finger has to hit, on any device that has one.
+   ------------------------------------------------------------
+   Keyed on the pointer rather than the width, because a tablet is wide and
+   still has no mouse -- and the old rules were all width-based, so a select
+   on an iPad stayed at its desktop height.
+   These numbers came out of measuring rather than a guideline: at 320px the
+   per-section range select was 136x30 and the small buttons 37 tall. 44 is
+   the figure Apple and Google both settle on, and the difference between
+   pressing a control and aiming at one. */
+@media (pointer: coarse) {
+  .btn, .btn-sm { min-height: 44px; }
+  .btn-icon { min-width: 44px; }
+  .input, .select, textarea.input { min-height: 44px; }
+  /* The compact per-section selects on the analysis page, which set their own
+     smaller height. */
+  .select.secrange, .input.secdate { min-height: 44px; padding-block: 8px; }
+  /* Table sort headers and the row-expand controls are pressed as often as
+     any button on these pages. */
+  table.data th button, table.data td button { min-height: 40px; }
+  /* The profile-picture badge and the type-size slider are handled beside
+     their own definitions further down, not here: both declare a fixed size
+     in a later rule, and a media block placed above it loses on source order
+     rather than on specificity. That cost one round of measuring -- the
+     selects on this page picked up their 44px and the camera badge stayed at
+     34 -- so the override lives next to the thing it overrides. */
+}
+
+
+/* ------------------------------------------------------------------ print
+   PDF export goes through the browser's own print engine rather than a
+   JavaScript PDF library, and that is a deliberate choice about Persian.
+
+   These pages are right-to-left Persian with Latin company names, email
+   addresses and Persian digits mixed into the same line. Getting that onto a
+   page correctly needs OpenType shaping (the joining forms of Arabic script),
+   mark positioning (the dots on ی/پ/چ/ژ and any vowel marks), and the
+   bidirectional algorithm of UAX #9 for the mixed runs. The browser rendering
+   this stylesheet already does all three -- it is doing them on screen right
+   now -- and its print path reuses the same engine, so the PDF comes out as
+   selectable, searchable vector text with the words in the right order.
+
+   Every library considered instead re-solves that badly: the Go options are
+   either unmaintained, or shape by substituting Unicode presentation forms
+   (U+FE70-FEFF) which the Persian fonts in use do not contain, or reverse the
+   string by hand instead of applying UAX #9 -- which is exactly the case these
+   pages consist of. A canvas screenshot, the usual client-side answer, throws
+   away the text layer altogether. So: no dependency, and better output.
+
+   What this stylesheet has to do is turn a dark, scrolling, interactive screen
+   into a light, paginated document. */
+@media print {
+  /* A section the reader left out of this PDF (nav.js, pickSections). */
+  .print-omit { display: none !important; }
+  @page {
+    size: A4; margin: 14mm 12mm;
+    /* Chrome renders @page margin boxes, so this needs no polyfill. A
+       multi-page report that does not number its pages cannot be checked for
+       completeness once it is on paper. */
+    @bottom-center {
+      /* The "persian" counter style gives ۱۲۳ rather than 123, so the page
+         numbers match every other figure in the document. An engine that does
+         not know the style falls back to decimal, which is still readable. */
+      content: "صفحه " counter(page, persian) " از " counter(pages, persian);
+      font-size: 8pt; color: #666;
+    }
+  }
+
+  /* The screen palette is dark. On paper that is a full-bleed black page:
+     hard to read, and it drains a toner cartridge for nothing. The tokens are
+     redefined rather than every rule rewritten, so anything that reads a
+     token -- including rules added later -- comes out light without being
+     touched here. */
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff; --surface-2: #ffffff; --surface-3: #f2f4f7;
+    --fg: #000000; --fg-muted: #2c2c2c; --fg-faint: #4a4a4a;
+    --line: #b6bcc7; --line-soft: #dfe3ea;
+    --accent-soft: #fdf0e4;
+  }
+  /* color-scheme, not just background. The stylesheet declares
+     "html { color-scheme: dark }" so the browser's native controls and
+     scrollbars match the theme, and that also sets the colour of the canvas
+     the page is painted onto -- which printed as a full-page rgb(18,18,18)
+     rectangle behind every sheet, measured in the generated PDF. A white
+     background on html cannot override it, because the canvas sits beneath
+     html's own box. */
+  html { color-scheme: light !important; }
+  html, body { background: #fff !important; color: #000 !important; }
+  /* Block flow for pagination. main is a grid on screen, and a grid container
+     fragments badly across printed pages -- an item that does not fit is moved
+     whole to the next sheet rather than split, which is what left the masthead
+     alone on page one. Block layout paginates the way a document should. */
+  main { display: block !important; max-width: none !important; }
+  main > * { margin-bottom: 5mm; }
+  /* Keep the colours that carry meaning -- the accent on a headline, the tier
+     shades on the org chart, the red and green on a rate. Browsers strip
+     backgrounds when printing unless told not to. */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  /* Controls are not content. Everything here is a thing you press, type in,
+     or scroll with, and none of it means anything on paper. */
+  /* .navsheet is the mobile menu. It is position:fixed just off the side of
+     the viewport rather than removed, so it survived into the print and
+     painted a dark band down the edge of the first sheet -- a fixed element
+     at a negative offset still has a box. */
+  /* .navscrim, not .navsheet-scrim: the latter is a class no element has ever
+   carried, so printing with the menu open painted the grey overlay across the
+   page. A selector for a class that does not exist fails silently, which is
+   why it survived. */
+.appbar, .skip, .navlinks, .navsheet, .navscrim, .crumb, .totop,
+  .filters, .analysis-range, .tablebar, .pager,
+  .ai-row, .ai-out, .org-tools, .org-hint, .org-zoom, .colmenu, .sortmark,
+  .datefield, .dp-grid, .dp-head, .dp-foot, .map-zoom, .skel,
+  .btn, .sortbtn .ic, .detail-head, .rownum {
+    display: none !important;
+  }
+  /* A sort button still has to show the column's name. */
+  .sortbtn { pointer-events: none; }
+
+  /* Scroll containers must become their own full height. Left alone, a
+     scrolling pane prints the one screenful that happens to be visible and
+     drops the rest silently -- the worst kind of wrong, because the page
+     looks complete. */
+  .scroll, .table-scroll, .org-view {
+    max-height: none !important; height: auto !important;
+    overflow: visible !important;
+  }
+  /* The org chart is a window onto a stage that a transform moves and scales.
+     On paper there is no window and no reader to pan it, so the stage goes
+     back into the flow at its own size and the whole tree prints. Without
+     this the sheet carries whichever corner happened to be on screen -- and
+     an absolutely positioned stage inside a box that has just been told to be
+     auto-height collapses that box to nothing, so the page prints blank. */
+  .org-stage {
+    position: static !important; transform: none !important;
+    width: auto !important;
+  }
+  /* The live canvas is replaced by its snapshot -- see chartsToPrint. The
+     image carries its own aspect ratio, so the boxes that were sized in pixels
+     for a canvas become auto and the chart keeps its proportions at whatever
+     width the column is. */
+  canvas { display: none !important; }
+  img.chartprint {
+    display: block !important;
+    width: 100% !important; height: auto !important; max-width: 100%;
+    break-inside: avoid;
+  }
+  .chartbox, .findchart, .seriesbox, .chartwell, .bannerbox {
+    overflow: visible !important;
+    height: auto !important; min-height: 0 !important;
+  }
+  /* Only the canvas boxes refuse to split -- a chart cut in half across two
+     sheets is unreadable. Their containers may break: a container holds the
+     caption, the chart and an insight list, and forcing that to stay whole is
+     what gave the masthead a page of its own. */
+  .chartbox, .findchart, .seriesbox { break-inside: avoid; }
+
+  /* Pagination. A table header repeats on every page it spans, and nothing
+     that reads as one unit gets cut in half. Cards are deliberately NOT
+     break-inside:avoid -- a section taller than a page would then push a
+     blank sheet ahead of itself. */
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  /* .insight is deliberately absent. A finding is a heading, a paragraph, a
+     chart and sometimes a table; forcing all of that to stay on one sheet
+     meant a finding that did not fit was moved whole, leaving a third of a
+     page blank behind it. Its text may now split -- the chart image still may
+     not, which is the part that would actually be ruined. */
+  tr, .rate, .org-card, .mini, .ov-list li { break-inside: avoid; }
+  h1, h2, h3, .card-head, .ov-h, .insights-head { break-after: avoid; }
+  .analysis-sec, .card, .widget {
+    box-shadow: none !important;
+    border-color: var(--line) !important;
+    background: #fff !important;
+  }
+  /* Glass panels are a screen effect; on paper they just wash the text out. */
+  .glass, .glass-lit { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+  /* Tables: lines rather than fills, which is how a table reads on paper. */
+  table { width: 100% !important; border-collapse: collapse !important; }
+  th, td {
+    border-bottom: 1px solid var(--line-soft) !important;
+    color: #000 !important;
+    /* 9.5pt: these tables run to a dozen columns of Persian, and anything
+       larger forces a landscape sheet for content that fits portrait. */
+    font-size: 9.5pt !important;
+    padding: 4px 6px !important;
+  }
+  th { border-bottom: 1.5px solid var(--line) !important; font-weight: 700; }
+
+  /* The org chart is the one page that genuinely needs the wide sheet. Told
+     here rather than left to the reader to discover in the dialog. */
+  .org-tree { page-break-inside: auto; }
+
+  /* Body copy at a size meant for paper rather than a screen at arm's length. */
+  .insight p { font-size: 10.5pt !important; line-height: 1.6 !important; }
+  .question { font-size: 10pt !important; }
+  .ov-lead { font-size: 11pt !important; }
+  .insights-foot, .findchart-note { font-size: 8.5pt !important; }
+
+  /* The print-only masthead, built by exportPDF. Hidden on screen. */
+  .printhead { display: block !important; }
+}
+
+/* The masthead exists in the DOM only while printing, but the rules live here
+   with the rest of the stylesheet rather than as inline styles on generated
+   markup. */
+.printhead { display: none; }
+/* The print snapshot of a chart exists in the DOM only while printing, and
+   must never appear beside the live canvas on screen. */
+img.chartprint { display: none; }
+@media print {
+  .printhead {
+    margin: 0 0 5mm; padding-bottom: 2.5mm;
+    border-bottom: 1.5px solid #000;
+    /* It is a masthead, not a title page. Nothing may push it to a sheet of
+       its own, and it must not be repeated. */
+    break-inside: avoid; break-after: avoid;
+  }
+  .printhead .ph-t { margin: 0; font-size: 15pt; font-weight: 800; color: #000;
+                     line-height: 1.25; }
+  .printhead .ph-s { margin: 1.5mm 0 0; font-size: 9pt; color: #333; line-height: 1.55; }
+  .printhead .ph-m { margin: 1mm 0 0; font-size: 8pt; color: #555; }
+}
+
+
+/* ------------------------------------------------------------ preferences
+   Per-person display settings, applied by applyPrefs() in nav.js.
+
+   The type size is CSS zoom on the root rather than a scaled set of font
+   tokens, and that is a deliberate compromise. Half of this application sizes
+   type in px -- the report tables, the chart captions, the org cards -- so
+   rescaling the --text-* tokens would enlarge some text and leave the rest
+   where it was, which looks like a bug rather than a setting. zoom scales
+   everything together, keeps every proportion, and is what somebody means
+   when they say the interface is too small. The cost is that it also scales
+   the layout, exactly as the browser's own zoom does; that is a familiar
+   behaviour rather than a surprising one.
+
+   It is reset for print: a PDF has to look the same whoever exported it, and
+   a reader who prefers large type on screen does not want a report that
+   paginates differently from a colleague's. */
+:root { --ui-zoom: 1; }
+html { zoom: var(--ui-zoom); }
+@media print { html { zoom: 1 !important; } }
+
+/* Compact tightens the spacing scale and nothing else. The type stays the
+   size it was: someone asking for more on screen at once is asking for less
+   padding, not for smaller words. */
+:root[data-density="comfortable"] {
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+  --s5: 20px; --s6: 24px; --s8: 32px; --s10: 40px;
+}
+/* Still honoured, so an older browser holding "compact" in localStorage --
+   or a page that has not yet heard from the account -- gets what it asked
+   for rather than nothing. It now matches the default, which is the point. */
+:root[data-density="compact"] {
+  --s1: 3px; --s2: 6px; --s3: 9px; --s4: 12px;
+  --s5: 15px; --s6: 18px; --s8: 24px; --s10: 30px;
+}
+
+/* An explicit motion switch, for a wall display or for somebody who finds the
+   movement distracting and should not have to change an operating-system
+   setting to say so. The media query is still honoured on its own; this is an
+   additional way to arrive at the same state. */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation-duration: .001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .001ms !important;
+  scroll-behavior: auto !important;
+}
+
+
+/* --------------------------------------------------------- the account page
+   The profile picture, the session list and the presence indicator. All of it
+   lives here rather than in settings.html because the pictures and the
+   presence dot also appear on other screens. */
+
+/* The picture, with its own edit affordance sitting on the corner. */
+.ava-wrap { position: relative; width: 96px; height: 96px; flex: none; }
+.ava {
+  width: 96px; height: 96px; border-radius: 50%;
+  object-fit: cover; display: block;
+  background: var(--surface-3);
+  box-shadow: 0 0 0 2px var(--line);
+}
+.ava-ph { padding: 18px; color: var(--fg-faint); }
+.ava-edit {
+  position: absolute; inset-block-end: -2px; inset-inline-end: -2px;
+  width: 34px; height: 34px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink);
+  border: 2px solid var(--surface);
+}
+.ava-edit svg { width: 16px; height: 16px; }
+.ava-edit:hover { background: var(--accent-hover); }
+/* On a touch device this is the smallest thing on the page and it sits half
+   off the corner of the photograph, which makes it one of the easiest to
+   miss. Measured at 34x34. */
+@media (pointer: coarse) {
+  .ava-edit { width: 44px; height: 44px; }
+  .ava-edit svg { width: 19px; height: 19px; }
+}
+
+.acct { display: grid; gap: var(--s4); }
+.acct-id { display: flex; gap: var(--s4); align-items: flex-start; flex-wrap: wrap; }
+.acct-who { display: grid; gap: 3px; min-width: 0; }
+.acct-who b { font-size: var(--text-lg); }
+.acct-acts { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s2); }
+
+/* The type-size control. The value is set in tabular figures so it does not
+   jog sideways as it counts up. */
+.fsrow { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.fsrow input[type="range"] { flex: 1 1 220px; min-width: 180px; accent-color: var(--accent); }
+/* A range track is 16px tall, which is not something a thumb can grab. The
+   height comes from padding so the track still looks slim while the hit area
+   is 44. */
+@media (pointer: coarse) {
+  .fsrow input[type="range"] { height: 44px; padding-block: 14px; box-sizing: border-box; }
+}
+.fsval {
+  min-width: 4.5ch; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+/* One row per session: what the device is, where it is, and when it last did
+   something. */
+.sesslist { display: grid; gap: var(--s2); }
+.sess {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s3); border-radius: var(--radius);
+  background: var(--surface-2); border: 1px solid var(--line-soft);
+}
+/* The device reading the page is marked rather than merely listed, so nobody
+   signs themselves out looking for an intruder. */
+.sess.here { border-inline-start: 3px solid var(--accent); }
+.sess-ic { width: 26px; height: 26px; flex: none; color: var(--fg-muted); margin-top: 2px; }
+.sess.here .sess-ic { color: var(--accent); }
+.sess-txt { display: grid; gap: 2px; min-width: 0; }
+.sess-txt b { font-size: var(--text-base); font-weight: 650; }
+.sess-meta {
+  font-size: var(--text-xs); color: var(--fg-faint);
+  /* An address is a Latin run inside a right-to-left line; isolated so it
+     does not drag the Persian around it out of order. */
+  unicode-bidi: isolate;
+}
+
+/* Presence, in the user list. A dot alone would carry the meaning in colour
+   only, so the word is always beside it. */
+.onchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--text-xs); color: var(--fg-faint); white-space: nowrap;
+}
+.onchip i {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--line);
+}
+.onchip.on { color: var(--ok); font-weight: 650; }
+.onchip.on i { background: var(--ok); box-shadow: 0 0 0 3px rgb(52 211 153 / .18); }
+
+/* A small face beside a name in the account list. */
+.ucell { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.uava {
+  width: 34px; height: 34px; border-radius: 50%; flex: none;
+  object-fit: cover; background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.uava-ph { padding: 7px; color: var(--fg-faint); }
+
+@media (max-width: 640px) {
+  .ava-wrap, .ava { width: 76px; height: 76px; }
+  .ava-ph { padding: 14px; }
+  .acct-id { gap: var(--s3); }
+}
+
+/* None of this is content: a printed copy of the settings page is not a thing
+   anybody needs, but if it happens the controls should not be on it. */
+@media print {
+  .ava-edit, .acct-acts, .fsrow button, .sesslist button { display: none !important; }
+}
+
+
+/* ------------------------------------------------------- header user menu
+   The signed-in person's picture in the app bar, and the panel it opens. */
+.um { position: relative; flex: none; }
+
+.um-btn {
+  width: 40px; height: 40px; padding: 0; border: 0; cursor: pointer;
+  border-radius: 50%; background: transparent;
+  display: grid; place-items: center;
+}
+.um-avatar {
+  width: 36px; height: 36px; border-radius: 50%; display: block;
+  object-fit: cover; background: var(--surface-3);
+  box-shadow: 0 0 0 2px var(--line);
+  transition: box-shadow var(--fast) var(--ease);
+}
+.um-avatar-ph { padding: 7px; color: var(--fg-muted); }
+.um-btn:hover .um-avatar { box-shadow: 0 0 0 2px var(--accent); }
+.um-btn[aria-expanded="true"] .um-avatar { box-shadow: 0 0 0 2px var(--accent); }
+.um-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.um-menu {
+  position: absolute; top: calc(100% + 8px);
+  /* Anchored to the button's own edge. The bar is right-to-left, so the
+     logical end is the left -- using left/right here instead would put the
+     panel off the wrong side of the screen. */
+  inset-inline-end: 0;
+  z-index: var(--z-popover);
+  width: 272px; max-width: calc(100vw - 24px);
+  /* Never taller than the window: with the type-size row, the switches and
+     the links it can be, and a panel running past the bottom edge cannot be
+     scrolled back into view. */
+  max-height: calc(100dvh - 96px); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--s2);
+  display: grid; gap: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.um-head { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s2) var(--s3); }
+.um-face {
+  width: 44px; height: 44px; border-radius: 50%; flex: none;
+  object-fit: cover; background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.um-face-ph { padding: 9px; color: var(--fg-faint); }
+.um-who { display: grid; gap: 1px; min-width: 0; }
+.um-who b { font-size: var(--text-base); font-weight: 700; }
+.um-who span { font-size: var(--text-xs); color: var(--fg-faint); }
+
+.um-sep { height: 1px; background: var(--line-soft); margin: var(--s1) 0; }
+
+/* Every entry is the same shape whether it is a button or a link, so the menu
+   reads as one list rather than as two kinds of thing. */
+.um-item {
+  display: flex; align-items: center; gap: var(--s3);
+  width: 100%; padding: 9px var(--s2); border: 0; cursor: pointer;
+  background: transparent; color: var(--fg); text-decoration: none;
+  border-radius: var(--radius); font: inherit; font-size: var(--text-base);
+  text-align: start;
+}
+.um-item:hover, .um-item:focus-visible {
+  background: var(--surface-3); text-decoration: none; outline: none;
+}
+.um-item .ic { width: 17px; height: 17px; flex: none; color: var(--fg-muted); }
+.um-item span { flex: 1; min-width: 0; }
+.um-state { font-style: normal; font-size: var(--text-xs); color: var(--fg-faint); }
+.um-danger { color: var(--bad); }
+.um-danger .ic { color: var(--bad); }
+
+/* The type-size stepper: a row rather than a menu item, because it is a
+   control somebody presses several times in a row instead of once. */
+.um-row {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: 6px var(--s2);
+}
+.um-label {
+  display: flex; align-items: center; gap: var(--s2);
+  flex: 1; min-width: 0; font-size: var(--text-base);
+}
+.um-label .ic { width: 17px; height: 17px; flex: none; color: var(--fg-muted); }
+.um-steps {
+  display: flex; align-items: center; gap: 2px; flex: none;
+  background: var(--surface-3); border-radius: var(--radius); padding: 2px;
+}
+.um-step {
+  width: 30px; height: 28px; padding: 0; border: 0; cursor: pointer;
+  background: transparent; color: var(--fg);
+  border-radius: var(--radius-sm);
+  font-size: 17px; line-height: 1; font-weight: 700;
+}
+.um-step:hover { background: var(--line); }
+.um-fs {
+  min-width: 4.5ch; text-align: center;
+  font-size: var(--text-xs); font-weight: 650;
+  font-variant-numeric: tabular-nums; color: var(--fg);
+}
+
+/* On a phone the panel hangs from the whole bar, not from the picture. The
+   bar wraps onto a second row on a narrow screen, so the picture is not
+   reliably at the edge -- and a near-full-width panel anchored to wherever it
+   landed ran off the other side of the page. .um stops being the anchor; the
+   bar (sticky, so positioned) takes over, and the panel spans it with a
+   margin either side, just under it. */
+@media (max-width: 560px) {
+  .um { position: static; }
+  .um-menu {
+    top: calc(100% + 6px); inset-inline: 10px; width: auto; max-width: none;
+    max-height: min(75dvh, calc(100dvh - 120px));
+  }
+}
+
+@media print { .um { display: none !important; } }
+
+/* ---------------------------------------------- touch targets, last word
+   The two controls still under 44px when the whole application was measured
+   on an emulated iPhone, after the earlier coarse-pointer blocks had done
+   their work: the user-menu button at 40px and the nav pin at 34px.
+
+   Here, at the end, rather than in the block that already raises .btn and
+   .input. Both declare a fixed width and height in a LATER rule than that
+   block, so a rule written up there loses on source order and quietly does
+   nothing -- the same trap that left .btn-sm at 40px for as long as it did,
+   and that this file already warns about beside the profile badge.
+
+   any-pointer, not pointer: an iPad Pro with a keyboard reports a FINE primary
+   pointer, so `pointer: coarse` would miss it, while `any-pointer: coarse`
+   still sees its touch screen. The nav pin used to be sized up here for that
+   device; it is now hidden on every coarse pointer instead (see the pinned
+   block above), so only the account button needs the larger touch target. */
+@media (any-pointer: coarse) {
+  .um-btn { width: 44px; height: 44px; }
+}
+
+/* ---- provenance: where a figure came from --------------------------------
+
+   This application prints four kinds of statement in one typeface: a row read
+   straight out of the database, a percentage calculated from several of them,
+   text a machine read off a scan, and a sentence a language model wrote. Set
+   identically they carry identical authority, which only the first of them
+   has earned. The badge is the one thing on screen separating them.
+
+   Colour is not the signal, because it cannot be on its own: the glyph and
+   the word carry it, and colour only reinforces. A reader who cannot
+   distinguish the hues still reads the glyph and the label.
+
+   Semantic tokens are reused rather than new hues invented -- this scale is
+   about confidence, which is what --ok/--warn/--info already encode. */
+.prov {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; line-height: 1;
+  padding: 3px 7px; border-radius: 4px;
+  border: 1px solid transparent;
+  white-space: nowrap; vertical-align: middle;
+  cursor: help;
+}
+.prov .g { font-size: 11px; font-weight: 700; }
+/* Read directly; nothing was computed. The quietest badge on the page,
+   because it is the default state of a reporting tool and shouting it would
+   make every table look like it was arguing. */
+.prov-verified { background: var(--ok-bg);   color: var(--ok-ink);   border-color: rgb(95 184 159 / .3); }
+/* Arithmetic over verified figures. */
+.prov-derived  { background: var(--info-bg); color: var(--info-ink); border-color: rgb(98 146 158 / .3); }
+/* Read off a scan: usually right, occasionally confidently wrong. */
+.prov-ocr      { background: var(--warn-bg); color: var(--warn-ink); border-color: rgb(224 177 92 / .3); }
+/* A model's interpretation. Violet, matching the AI card and its button, so
+   the colour already means "this came from the model" everywhere it appears. */
+.prov-ai {
+  background: rgb(139 92 246 / .16); color: #C4B0FF;
+  border-color: rgb(167 139 250 / .38);
+}
+
+/* Beside a heading the badge should sit with the text, not on top of it. */
+.prov-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* The key, shown once on a page that uses badges rather than in a help screen
+   nobody opens. Four short definitions cost less room than one paragraph
+   explaining why a number should be doubted. */
+.prov-key {
+  display: flex; flex-wrap: wrap; gap: 8px 16px;
+  padding: 10px 12px; margin-top: 12px;
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 12px; color: var(--fg-faint);
+}
+.prov-key > div { display: flex; align-items: center; gap: 6px; }
+/* ---- the loader blob ------------------------------------------------------
+
+   An abstract 3D blob, raymarched in a fragment shader (see startBlob in
+   nav.js). The CSS orbit above stays in the markup and stays visible: it is
+   the fallback, not a leftover. .has-blob is added only once a WebGL context
+   has been created, a program has linked and the canvas is about to draw, so
+   a machine without WebGL -- or a reader who asked for less motion -- keeps
+   the orbit and never sees an empty box where the loader should be.
+
+   Sized in the same box the orbit occupies so swapping one for the other
+   moves nothing on the page: .ld above is already position:relative and
+   13em square, driven by the --ld-size contract every call site uses, so
+   inset:0 inherits that sizing and no second .ld rule is needed here. A
+   duplicate would only be a same-specificity rule further down the file,
+   which is how this stylesheet has been bitten five times already. */
+.ld-blob {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+  pointer-events: none;
+}
+.ld.has-blob .orbit { display: none; }
+/* ---- the loading caption --------------------------------------------------
+
+   "در حال بارگذاری" under the blob, with three dots that rise in sequence.
+
+   aria-hidden, and that is not an oversight: .ld already carries
+   role="status" with an aria-label saying the same thing, so exposing this
+   too would have a screen reader announce the wait twice. It is here for the
+   eye only.
+
+   The dots are three elements rather than animated text content, because
+   animating the text would make the caption's width jump between one dot and
+   three and shuffle the whole line under a centred blob. */
+.ld-cap {
+  margin: 14px 0 0;
+  font-size: 13px; font-weight: 500;
+  color: var(--fg-muted);
+  letter-spacing: .01em;
+  display: flex; align-items: baseline; gap: 1px;
+}
+.ld-dots { display: inline-flex; gap: 3px; margin-inline-start: 4px; }
+.ld-dots i {
+  width: 3px; height: 3px; border-radius: 50%;
+  background: currentColor; opacity: .25;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ld-dots i { animation: ld-dot 1.25s ease-in-out infinite; }
+  /* Staggered by about a seventh of the cycle rather than a third, so the
+     wave reads as travelling along the row instead of three lamps blinking
+     in rotation. */
+  .ld-dots i:nth-child(2) { animation-delay: .17s; }
+  .ld-dots i:nth-child(3) { animation-delay: .34s; }
+  @keyframes ld-dot {
+    0%, 70%, 100% { opacity: .22; transform: translateY(0); }
+    35%           { opacity: 1;   transform: translateY(-3px); }
+  }
+}
+/* ---- system health --------------------------------------------------------
+
+   One row per dependency. The dot carries colour and the word beside it
+   carries the same meaning in text, because a status board distinguished by
+   hue alone tells a colour-blind administrator nothing -- and this is a page
+   read precisely when somebody is anxious and scanning fast.
+
+   Four states, not three: "idle" is a dependency nobody configured, which is
+   a choice rather than a fault, and it must not look like either green or
+   red. */
+.health { display: flex; flex-direction: column; }
+.health-row {
+  display: grid; grid-template-columns: 10px 1fr auto;
+  align-items: start; gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.health-row:last-child { border-bottom: 0; }
+.health-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  margin-top: 6px;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / .04);
+}
+.health-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.health-text b { font-size: 14px; font-weight: 600; }
+.health-text span {
+  font-size: 12.5px; color: var(--fg-faint); line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.health-state {
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  padding: 3px 9px; border-radius: var(--radius-full);
+  border: 1px solid transparent; margin-top: 2px;
+}
+.health-ok    { background: var(--ok);   }
+.health-warn  { background: var(--warn); }
+.health-bad   { background: var(--bad);  }
+.health-idle  { background: var(--fg-faint); }
+/* The pill takes the tint; the dot above takes the solid colour. Split so the
+   two never fight for attention in the same row. */
+.health-state.health-ok   { background: var(--ok-bg);   color: var(--ok-ink);   border-color: rgb(95 184 159 / .3); }
+.health-state.health-warn { background: var(--warn-bg); color: var(--warn-ink); border-color: rgb(224 177 92 / .3); }
+.health-state.health-bad  { background: var(--bad-bg);  color: var(--bad-ink);  border-color: rgb(217 86 111 / .3); }
+.health-state.health-idle { background: var(--surface-2); color: var(--fg-faint); border-color: var(--line-soft); }
+
+@media (max-width: 460px) {
+  .health-row { grid-template-columns: 10px 1fr; }
+  .health-state { grid-column: 2; justify-self: start; margin-top: 4px; }
+}
+/* ---- the assistant's face -------------------------------------------------
+
+   The assistant's picture. Masked to a circle, which is why the source is a
+   JPEG with no transparency: the corners are never drawn, so storing an
+   alpha channel for them would be 157 KB spent on pixels nobody sees.
+
+   The ring is the application's accent rather than a neutral border. The
+   source image already carries an orange gear halo behind the head, and a
+   grey ring around it would read as two competing frames. */
+.asst-ava {
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  background: var(--surface-2);
+  border: 2px solid rgb(229 100 29 / .38);
+}
+/* Beside a message. Small enough that the head is all that reads at this
+   size, which is why the crop is tight on it. */
+.asst-ava-sm { width: 32px; height: 32px; border-width: 1px; }
+/* At the head of the page, where it is the product's face and can afford
+   the glow the AI controls elsewhere already use. */
+.asst-ava-lg {
+  width: 56px; height: 56px;
+  box-shadow: 0 0 18px rgb(229 100 29 / .30);
+}
+.asst-head { display: flex; align-items: center; gap: 12px; }
+.asst-head .asst-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.asst-head .asst-name b { font-size: 15px; font-weight: 600; }
+.asst-head .asst-name span { font-size: 12px; color: var(--fg-faint); }
+
+/* ============================================ the assistant's chat tab
+   The assistant, docked at the foot of every page on a desk --
+   never on a phone or in the installed application (see the end of this
+   section).
+
+   Here rather than in a page, because it is on all of them. The full chat
+   page at /chat styles itself; what these rules own is the tab and the panel
+   it opens, which have to look the same on the reports, the documents, the
+   builder and the home page without any of them knowing about it.
+
+   Physically left. These pages are right-to-left, so the logical end IS the
+   left -- but .totop already owns the bottom right in physical terms, and two
+   round things in one corner is how a corner stops being usable. */
+.fc-dock {
+  position: fixed; z-index: 70;
+  inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
+  left: 18px; right: auto;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  /* The container is furniture with nothing drawn in it, and on a phone it
+     spans the width. A transparent box still receives taps, so without this
+     it swallows whatever sits under it -- measured on the org chart, where it
+     covered the lower half of the zoom buttons. The pieces that ARE drawn
+     take their events back. */
+  pointer-events: none;
+}
+.fc-tab, .fc-panel { pointer-events: auto; }
+
+/* ---- shut: a pill with a face, a name and a dot ---- */
+.fc-tab {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px 7px 7px; border: 1px solid var(--line);
+  border-radius: var(--radius-full); cursor: pointer;
+  background: var(--surface-2); color: var(--fg);
+  box-shadow: 0 8px 26px rgb(0 0 0 / .42);
+  transition: transform var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.fc-tab:hover { background: var(--surface-3); transform: translateY(-1px); }
+.fc-tab:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.fc-tab-ava { position: relative; flex: none; display: block; }
+.fc-tab-ava img {
+  width: 34px; height: 34px; border-radius: 50%; display: block; object-fit: cover;
+  background: var(--surface-3);
+}
+.fc-tab-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
+.fc-tab-txt b { font-size: 13.5px; font-weight: 700; line-height: 1.2; }
+.fc-tab-sub { font-size: 11.5px; color: var(--fg-muted); line-height: 1.2; }
+.fc-tab-caret { display: grid; place-items: center; color: var(--fg-faint); }
+.fc-tab-caret svg { width: 15px; height: 15px; transform: rotate(90deg); transition: transform var(--fast) var(--ease); }
+.fc-dock.open .fc-tab-caret svg { transform: rotate(-90deg); }
+
+/* The dot.
+   Two states with two colours and two meanings -- green is "the reporting
+   database answered a moment ago", grey is "it did not". It is set from the
+   server's answer in chat.js and never written on: a dot that is always green
+   tells a reader the assistant is ready at the exact moment it cannot answer
+   anything, so the first question comes back as a failure they were just
+   promised would not happen. */
+.fc-dot {
+  position: absolute; inset-block-end: -1px; inset-inline-end: -1px;
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid var(--surface-2);
+}
+.fc-dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgb(95 184 159 / .22); }
+.fc-dot.off { background: var(--fg-faint); }
+.fc-head-sub .fc-dot { position: static; border: 0; width: 8px; height: 8px; box-shadow: none; }
+
+/* ---- open: the panel above the pill ---- */
+.fc-panel {
+  width: min(374px, calc(100vw - 36px));
+  height: min(540px, calc(100vh - 150px));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 22px 60px rgb(0 0 0 / .55);
+}
+.fc-head {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  padding: 10px 12px; border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.fc-head-ava { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex: none; background: var(--surface-3); }
+.fc-head-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.fc-head-txt b { font-size: 14px; font-weight: 700; line-height: 1.2; }
+.fc-head-sub { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--fg-muted); }
+.fc-head-btn {
+  display: grid; place-items: center; width: 30px; height: 30px; flex: none;
+  padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: transparent; color: var(--fg-muted); text-decoration: none;
+}
+.fc-head-btn:hover { background: var(--surface-3); color: var(--fg); }
+.fc-head-btn svg { width: 15px; height: 15px; }
+.fc-body { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+/* ---- the conversation itself, shared by the panel and the /chat page ---- */
+.fc-log {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px; scrollbar-width: thin;
+}
+/* The reader's own words on the right, the assistant's on the left.
+   ----------------------------------------------------------------
+   Physical sides, and asked for in those words. This page is right-to-left,
+   so the logical start IS the right -- which means "me on the right" is the
+   default for my own row and needs nothing, while the assistant's row has to
+   be turned round to reach the other side. A logical property here would read
+   as the opposite of what it does, which is why these are spelled out. */
+.fc-row { display: flex; align-items: flex-end; gap: 8px; max-width: 100%; }
+/* row-reverse puts the main-start at the physical left, so the assistant's
+   avatar and bubble hug that edge. align-items:flex-start because an answer
+   with a table in it is tall, and an avatar pinned to the bottom of a card
+   six lines high reads as belonging to whatever comes next. */
+.fc-row.fc-bot { flex-direction: row-reverse; align-items: flex-start; }
+.fc-ava { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex: none; background: var(--surface-3); }
+.fc-bub {
+  max-width: min(84%, 620px); padding: 9px 13px;
+  border-radius: 16px; font-size: 14px; line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+/* The reader's own words in the accent, the assistant's on a surface. Which
+   way round matters: the accent is the colour of things this application
+   does, and a bubble the reader wrote is the one thing on the page they did. */
+/* The squared corner is the tail, so it sits on the side the bubble is
+   anchored to. In a right-to-left page inline-start is the RIGHT, which is
+   where the reader's own bubble now sits. */
+.fc-me .fc-bub {
+  background: var(--accent); color: var(--accent-ink);
+  border-end-start-radius: 5px; font-weight: 550;
+}
+.fc-bot .fc-bub {
+  background: var(--surface-2); color: var(--fg);
+  border: 1px solid var(--line); border-end-end-radius: 5px;
+}
+
+/* The clock, and the ticks beside it on the reader's own messages.
+   ---------------------------------------------------------------
+   Set on its own line at the bubble's end rather than floated into the text:
+   an answer here can be a table, and a timestamp tucked against wrapped
+   Persian mixed with Latin company names lands somewhere different in every
+   bubble. */
+.fc-meta {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 5px; justify-content: flex-end;
+  font-size: 10.5px; line-height: 1; opacity: .75;
+}
+.fc-time { font-variant-numeric: tabular-nums; }
+.fc-bot .fc-meta { color: var(--fg-faint); }
+.fc-me .fc-meta { color: var(--accent-ink); }
+
+/* Two overlapping ticks, of which the second is hidden until the assistant
+   has actually answered. Nothing here runs on a timer: see tickNode in
+   chat.js for what each state is asserting. */
+.fc-tick { display: inline-flex; align-items: center; }
+.fc-tick svg { width: 13px; height: 13px; }
+.fc-tick svg + svg { margin-inline-start: -7px; }
+.fc-tick.sent svg + svg { display: none; }
+.fc-tick.read { opacity: 1; }
+.fc-tick.failed { color: var(--bad); }
+.fc-tick.failed svg { width: 12px; height: 12px; }
+
+/* Short or long, as a segmented pair rather than a switch.
+   A switch has an on and an off and would have to pick which of these two is
+   which; both are ordinary ways to read an answer. */
+.fc-mode {
+  display: inline-flex; flex: none; padding: 2px; gap: 2px;
+  border: 1px solid var(--line); border-radius: var(--radius-full);
+  background: var(--surface);
+}
+.fc-mode button {
+  padding: 5px 11px; border: 0; border-radius: var(--radius-full);
+  cursor: pointer; font-size: 11.5px; font-weight: 700; line-height: 1;
+  background: transparent; color: var(--fg-muted);
+}
+.fc-mode button:hover { color: var(--fg); }
+.fc-mode button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.fc-mode button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A short answer is the full one with its body folded away, not a different
+   answer -- so the control that opens it has nothing to fetch and cannot
+   disagree with what a long answer would have shown. */
+.fc-a-short .fc-a-tablewrap,
+.fc-a-short .fc-a-more,
+.fc-a-short .fc-a-detail,
+.fc-a-short .fc-a-note,
+.fc-a-short .fc-a-foot { display: none; }
+
+/* The headline is the whole of a short answer, so in short mode the
+   paragraph goes with the table. An answer that has no headline -- nothing in
+   the rows to take one from -- keeps its summary, because there the summary
+   IS the answer: "no guarantee was found in this period". */
+.fc-a-short .fc-a-sum { display: none; }
+.fc-a-short.fc-a-nohead .fc-a-sum { display: block; }
+.fc-a-head {
+  margin: 0 0 6px; font-size: 16px; font-weight: 700; line-height: 1.65;
+}
+/* At full length the headline would only repeat the table's first row, so
+   there it gives way to the sentence that says what the table means. */
+.fc-answer:not(.fc-a-short) .fc-a-head { display: none; }
+.fc-a-open {
+  margin-top: 8px; padding: 6px 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--radius-full);
+  background: var(--surface); color: var(--fg-muted);
+  font-size: 12px; font-weight: 650;
+}
+.fc-a-open:hover { border-color: var(--accent); color: var(--fg); }
+.fc-a-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* An answer inside a bubble. */
+.fc-a-title { margin: 0 0 4px; font-size: 14.5px; font-weight: 700; }
+.fc-a-sum { margin: 0 0 8px; font-size: 14px; line-height: 1.8; }
+.fc-a-tablewrap { overflow-x: auto; margin: 8px -4px 0; padding: 0 4px; scrollbar-width: thin; }
+.fc-a-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fc-a-table th, .fc-a-table td {
+  padding: 5px 8px; text-align: start; border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap;
+}
+.fc-a-table th { font-weight: 700; color: var(--fg-muted); font-size: 12px; }
+.fc-a-table td.num, .fc-a-table th.num {
+  text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fc-a-table tr:last-child td { border-bottom: 0; }
+.fc-a-more, .fc-a-detail, .fc-a-note, .fc-a-foot {
+  margin: 7px 0 0; font-size: 12px; line-height: 1.7; color: var(--fg-muted);
+}
+.fc-a-foot { color: var(--fg-faint); font-size: 11.5px; }
+
+/* Waiting: the three-dot typing indicator.
+   ----------------------------------------
+   Drawn in CSS rather than played as a Lottie, and that is a decision about
+   this application rather than about the animation. The dotLottie renderer
+   vendored here is WebAssembly, and instantiating it needs 'wasm-unsafe-eval'
+   in script-src -- which errorpages.go deliberately scopes to the two error
+   pages, because it "would be a standing relaxation on every page that
+   handles live commercial data, bought for a decorative robot". This
+   indicator appears inside the chat tab, which is on every one of those
+   pages, so playing it there would buy exactly that relaxation for exactly
+   that reason. Three dots are three dots; the policy is the asset.
+
+   The motion is the usual one: each dot rises and swells in turn, a third of
+   a cycle apart, and the row never goes blank between beats. */
+.fc-dots { display: flex; align-items: center; gap: 5px; padding: 4px 2px; }
+.fc-dots i {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--fg-muted);
+  animation: fc-bounce 1.25s infinite cubic-bezier(.35, .1, .35, 1);
+}
+.fc-dots i:nth-child(2) { animation-delay: .18s; }
+.fc-dots i:nth-child(3) { animation-delay: .36s; }
+@keyframes fc-bounce {
+  0%, 60%, 100% { opacity: .38; transform: translateY(0) scale(.86); }
+  30%           { opacity: 1;   transform: translateY(-4px) scale(1); }
+}
+/* Still three dots, still clearly "working", with nothing moving. */
+@media (prefers-reduced-motion: reduce) {
+  .fc-dots i { animation: none; opacity: .6; }
+  .fc-dots i:nth-child(1) { opacity: 1; }
+}
+
+/* The one destructive button in the application, and it is only ever the
+   confirming half of a question that already named what will be lost. */
+.btn-danger {
+  background: var(--bad, #b3261e) !important;
+  border-color: var(--bad, #b3261e) !important;
+  color: #fff !important;
+}
+
+/* ======================================================== form fields
+   Shared by the announcement form on the home page and the folder
+   dialogs on the documents page. Moved here from home.html when the
+   second caller appeared. */
+/* ------------------------------------------------- the compose form */
+/* Labels above their fields, in one column. A notice has a title, a summary
+   and a body of quite different lengths, and side-by-side labels would set
+   the whole form to the width of the longest word in the Persian for
+   "attachments". The two dates are the exception, because they are a pair
+   and are read as one. */
+#annSheet .sheet-body { display: flex; flex-direction: column; gap: var(--s4); }
+.fld { display: flex; flex-direction: column; gap: 5px; }
+.fld > span { font-size: var(--text-sm); font-weight: 650; color: var(--head-ink); }
+/* "optional", set quieter and lighter inside the label rather than as a
+   placeholder -- a placeholder disappears the moment somebody types, which
+   is exactly when they might still want to know the field can be left out. */
+.fld > span i { font-style: normal; font-weight: 500; color: var(--cal-ink-2); font-size: var(--text-xs); }
+.fld .input, .fld textarea {
+  width: 100%; padding: 9px 11px;
+  border: 1px solid var(--panel-line); border-radius: var(--radius);
+  background: rgb(255 255 255 / .6); color: var(--cal-ink);
+  font: inherit; font-size: var(--text-sm);
+}
+.fld textarea { resize: vertical; min-height: 84px; line-height: 1.8; }
+.fld .input:focus-visible, .fld textarea:focus-visible {
+  outline: 2px solid var(--cal-ink); outline-offset: 1px;
+}
+/* The dates share a row on anything wider than a phone and stack below it,
+   which is the one breakpoint this form needs. */
+.fld-row { display: flex; gap: var(--s4); flex-wrap: wrap; }
+.fld-row > .fld { flex: 1 1 190px; min-width: 0; }
+.fld-check { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--cal-ink-2); }
+.fld-check input { width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
+/* Where a refusal lands. Red only when it is one -- the same element carries
+   the progress line while a large attachment uploads. */
+.fld-note { margin: 0; font-size: var(--text-sm); color: var(--cal-ink-2); }
+.fld-note.bad { color: var(--bad, #b3261e); font-weight: 600; }
+.sheet-foot {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--panel-line);
+}
+/* A submit that is working says so and cannot be pressed again. Publishing
+   twice because the first press looked like it did nothing is the failure
+   worth spending a disabled state on. */
+#annInSubmit[aria-busy="true"] { pointer-events: none; }
+
+
+/* ===================================================== the upload control
+   Shared by the announcement form and the documents page. Behaviour and
+   markup are in upload.js; this is only how it looks.
+
+   The zone is a dashed outline rather than a filled box, which is the
+   convention for "drop here" and reads as an opening rather than a surface.
+   It fills in on hover, on keyboard focus and while a file is over it --
+   three states that all mean "this will take it", drawn the same way so the
+   reader learns one thing. */
+.up-zone {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; cursor: pointer;
+  border: 1.5px dashed var(--panel-line, var(--line));
+  border-radius: var(--radius-lg, 12px);
+  background: rgb(255 255 255 / .35);
+  color: var(--cal-ink-2, var(--fg-muted));
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.up-zone:hover, .up-zone.over, .up-zone:focus-visible {
+  background: rgb(255 255 255 / .7);
+  border-color: var(--accent);
+}
+.up-zone:focus-visible { outline: 2px solid var(--cal-ink, var(--accent)); outline-offset: 2px; }
+.up-zone.over { border-style: solid; }
+/* Once something is chosen the zone is no longer the main event -- the file
+   row below it is -- so it steps back rather than competing. */
+.up-zone.has-file { padding: 9px 14px; opacity: .8; }
+.up-ic { width: 20px; height: 20px; flex: none; color: var(--accent); }
+.up-cap { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.up-cap > span:first-child { font-size: var(--text-sm); font-weight: 650; }
+.up-sub { font-size: var(--text-xs); opacity: .8; }
+
+/* The real input, kept focusable but out of sight. display:none would take it
+   out of the tab order, and then the control could not be reached by
+   keyboard at all. */
+.up-input {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+.up-list { display: flex; flex-direction: column; gap: 6px; }
+.up-list:not(:empty) { margin-top: 8px; }
+.up-file {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--panel-line, var(--line));
+  border-radius: var(--radius, 8px);
+  background: rgb(255 255 255 / .55);
+  font-size: var(--text-xs);
+  color: var(--cal-ink-2, var(--fg-muted));
+}
+.up-fic { width: 14px; height: 14px; flex: none; opacity: .8; }
+/* The name is an identifier and keeps its own order; isolate stops it
+   dragging the size beside it to the other end of the row. */
+.up-name {
+  flex: 1; min-width: 0; direction: ltr; unicode-bidi: isolate; text-align: start;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.up-size { flex: none; font-variant-numeric: tabular-nums; opacity: .85; }
+.up-x {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  border: 0; border-radius: 50%; background: none; cursor: pointer;
+  color: var(--cal-ink-2, var(--fg-muted));
+}
+.up-x:hover { background: rgb(0 0 0 / .08); color: var(--bad, #b3261e); }
+.up-x .ic { width: 13px; height: 13px; }
+.up-err { margin: 6px 0 0; font-size: var(--text-xs); color: var(--bad, #b3261e); font-weight: 600; }
+
+/* ---------------------------------------------- the button that flies
+   Pressed, the paper plane leaves; answered, it comes back as a tick.
+
+   One control carrying all three states, because that is where the reader is
+   already looking -- they just pressed it. A spinner somewhere else asks them
+   to find it.
+
+   The plane and the tick are both in the markup and exactly one is shown, so
+   nothing is built at the moment of the animation. */
+.fly-btn { position: relative; overflow: hidden; }
+.fly-btn .fly-check { display: none; }
+.fly-btn .ic { transition: transform 520ms cubic-bezier(.3, -.4, .2, 1), opacity 320ms ease; }
+
+/* Away: up and out along the page's own leading edge, so on this
+   right-to-left page it leaves to the left the way the text runs. */
+.fly-btn.fly-going .fly-plane { transform: translate(-46px, -26px) rotate(-28deg); opacity: 0; }
+.fly-btn.fly-going .fly-label { opacity: .55; }
+
+/* Landed. The tick replaces the plane and the button goes green -- the one
+   place in this application where a control changes colour to report an
+   outcome, which is why it is worth it. */
+.fly-btn.fly-done { background: var(--ok, #1f8a4c) !important; border-color: var(--ok, #1f8a4c) !important; }
+.fly-btn.fly-done .fly-plane { display: none; }
+.fly-btn.fly-done .fly-check { display: inline-flex; animation: fly-pop 360ms cubic-bezier(.2, 1.5, .4, 1); }
+@keyframes fly-pop {
+  from { transform: scale(.4); opacity: 0; }
+  to   { transform: scale(1);  opacity: 1; }
+}
+
+/* Reduced motion: the states still change, they just do not travel. Somebody
+   who asked for less movement still needs to know whether it sent. */
+@media (prefers-reduced-motion: reduce) {
+  .fly-btn .ic { transition: opacity 200ms ease; }
+  .fly-btn.fly-going .fly-plane { transform: none; opacity: 0; }
+  .fly-btn.fly-done .fly-check { animation: none; }
+}
+
+/* The thought orb that replaces those dots once it can.
+ *
+ * Both are in the markup at once and exactly one is visible. The dots are the
+ * FALLBACK and they are the thing that renders first: the orb needs a 2D
+ * context and a script fetched on first use, so for the first moment -- and
+ * for good on an engine that cannot give it a context -- the dots are what is
+ * on screen. .has-blob is added by startOrb only after a frame has actually
+ * been drawn, which is the one moment it is safe to take the dots away.
+ *
+ * Ordered this way round on purpose. Hiding the dots up front and revealing
+ * them on failure would blink an empty bubble every time the script is a
+ * fetch behind, and an empty bubble is indistinguishable from a question that
+ * was ignored -- which is the whole thing this indicator exists to prevent. */
+.fc-think { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.fc-orb { width: 30px; height: 30px; display: block; flex: none; }
+.fc-think.has-blob .fc-dots { display: none; }
+
+/* "در حال نوشتن…" beside it. The orb says something is happening; this says
+   what, which a spinner cannot. */
+.fc-think-cap {
+  display: inline-flex; align-items: baseline; gap: 1px;
+  font-size: var(--text-sm); color: var(--fg-muted); white-space: nowrap;
+}
+/* The ellipsis, animated as three separate marks rather than written as "…"
+   so it reads as ongoing rather than as punctuation. Its rhythm is the
+   loader caption's, because they are the same idea in two places. */
+.fc-cap-dots { display: inline-flex; gap: 2px; padding-inline-start: 2px; }
+.fc-cap-dots i {
+  width: 3px; height: 3px; border-radius: 50%; background: currentColor;
+  opacity: .35; animation: fc-cap-blink 1.4s infinite;
+}
+.fc-cap-dots i:nth-child(2) { animation-delay: .2s; }
+.fc-cap-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes fc-cap-blink {
+  0%, 70%, 100% { opacity: .3; }
+  35%           { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-cap-dots i { animation: none; opacity: .6; }
+}
+
+/* Offered questions. Buttons, because the reader's next move is to ask one. */
+/* Offered under the assistant's bubble, so they run from the same edge it
+   does -- the physical left -- and clear of the avatar. Physical, for the
+   reason given on .fc-row above. */
+.fc-chips {
+  display: flex; flex-wrap: wrap; gap: 7px;
+  flex-direction: row-reverse; justify-content: flex-start;
+  padding-left: 38px; padding-right: 0;
+}
+.fc-chip {
+  padding: 7px 12px; border-radius: var(--radius-full); cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--fg);
+  font-size: 12.5px; font-weight: 600; text-align: start; line-height: 1.5;
+}
+.fc-chip:hover { border-color: var(--accent); background: var(--surface-3); }
+.fc-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The input bar: one rounded field with a circular send button beside it. */
+.fc-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line); background: var(--surface-2);
+}
+.fc-in {
+  flex: 1; min-width: 0; min-height: 42px; padding: 0 16px;
+  /* 16px: anything smaller makes iOS Safari zoom the page on focus. */
+  font-size: 16px; font-weight: 500; color: var(--fg);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-full); outline: none;
+}
+.fc-in::placeholder { color: var(--fg-faint); }
+.fc-in:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+.fc-send {
+  flex: none; display: grid; place-items: center; width: 42px; height: 42px;
+  padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink);
+}
+.fc-send:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, #fff); }
+.fc-send:disabled { opacity: .45; cursor: default; }
+.fc-send:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+/* The glyph points the way the text goes, which here is leftward. */
+.fc-send svg { width: 17px; height: 17px; transform: scaleX(-1); }
+
+/* The /chat page's suggestion chips, on a phone. */
+@media (max-width: 560px) {
+  .fc-chips { padding-left: 0; }
+}
+
+/* Never on paper: it is furniture, and it sits over the page. */
+@media print { .fc-dock { display: none !important; } }
+
+/* Nor wherever the glass dock is the navigation, nor in the installed
+   application at any size: asked for by name. The assistant is a page of its
+   own there -- /ask, one press away on the dock itself.
+
+   Measured on the live 5.25.0 at 390px before it went: the tab's container
+   was a 356px bar at z-index 70 over the dock's 35, and the pill in it sat on
+   home, the documents and the inbox, the three places the dock is for.
+
+   chat.js does not mount the tab in these cases at all, with the same query
+   (FC_NO_TAB). This rule is for a window narrowed after the page loaded. */
+@media (max-width: 860px), (pointer: coarse), (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+  .fc-dock { display: none !important; }
+}
+
+/* The install button on a page with no header bar to put it in.
+   Floated rather than dropped into the flow: appended to <body> it lands
+   wherever the document happens to end, which on a page laid out to exactly
+   one viewport is below the fold -- and it makes that page scroll by its own
+   height. See showInstallButton in nav.js. */
+.a2hs-loose {
+  position: fixed; z-index: 80;
+  inset-block-start: calc(10px + env(safe-area-inset-top, 0px));
+  inset-inline-start: 12px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / .45);
+}
+
+/* The "add to notebook" picker (nav.js addToNotebook): the reader's recent
+   notebooks as buttons, and a field to start a new one. */
+dialog.nb-pick {
+  display: grid; gap: var(--s2); min-width: min(360px, calc(100vw - 32px));
+  padding: var(--s4); background: var(--surface); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--radius-lg, 12px);
+}
+dialog.nb-pick::backdrop { background: rgb(0 0 0 / .45); }
+dialog.nb-pick h2 { margin: 0 0 var(--s2); font-size: var(--text-md); }
+dialog.nb-pick .btn { justify-content: flex-start; }
+dialog.nb-pick .nb-new { display: flex; gap: var(--s2); margin-top: var(--s2); }
+dialog.nb-pick .nb-new .input { flex: 1; min-width: 0; }
+
+/* ---------------------------------------------------------------- palette
+   Ctrl+K on every page (nav.js). A sheet near the top on a wide screen, the
+   full width on a phone; results grouped, the active row marked for the
+   keyboard as well as the eye. */
+.cmdk-btn {
+  display: inline-flex; align-items: center; gap: 6px; margin-inline-start: var(--s2);
+  padding: 6px 10px; min-height: 36px; border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--line-soft); background: var(--surface-2); color: var(--fg-muted);
+  font: inherit; font-size: var(--text-sm); cursor: pointer;
+}
+.cmdk-btn:hover, .cmdk-btn:focus-visible { color: var(--fg); border-color: var(--line); }
+.cmdk-btn .ic { width: 16px; height: 16px; }
+.cmdk-btn kbd { font: inherit; font-size: var(--text-xs); opacity: .7; direction: ltr; }
+@media (max-width: 599px) { .cmdk-btn .cmdk-btn-label, .cmdk-btn kbd { display: none; } .cmdk-btn { min-width: 44px; min-height: 44px; justify-content: center; } }
+dialog.cmdk {
+  width: min(640px, calc(100vw - 24px)); max-height: min(70vh, 640px); margin-top: 10vh;
+  padding: 0; display: none; flex-direction: column; overflow: hidden;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 14px); box-shadow: 0 24px 60px rgb(0 0 0 / .45);
+}
+dialog.cmdk[open] { display: flex; }
+dialog.cmdk::backdrop { background: rgb(0 0 0 / .5); }
+@media (max-width: 599px) { dialog.cmdk { margin-top: 12px; max-height: calc(100vh - 24px); } }
+.cmdk-top { display: flex; align-items: center; gap: var(--s2); padding: var(--s3); border-bottom: 1px solid var(--line-soft); }
+.cmdk-top .ic { width: 18px; height: 18px; color: var(--fg-muted); flex: none; }
+.cmdk-top input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--fg); font: inherit; font-size: var(--text-md); }
+.cmdk-list { overflow-y: auto; padding: var(--s2); }
+.cmdk-group { padding: var(--s2) var(--s2) 4px; font-size: var(--text-xs); color: var(--fg-muted); letter-spacing: .02em; }
+.cmdk-item { display: grid; gap: 2px; padding: 8px var(--s3); border-radius: 8px; cursor: pointer; }
+.cmdk-item b { font-weight: 600; }
+.cmdk-item span { font-size: var(--text-xs); color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmdk-item[aria-selected="true"] { background: var(--surface-3); }
+.cmdk-empty { padding: var(--s4); color: var(--fg-muted); text-align: center; }
+.cmdk-foot { display: flex; gap: var(--s4); padding: 8px var(--s3); border-top: 1px solid var(--line-soft); font-size: var(--text-xs); color: var(--fg-muted); }
+@media (max-width: 599px) { .cmdk-foot { display: none; } }
+.cmdk-status { display: grid; gap: 6px; padding: var(--s3); }
+.cmdk-status p { margin: 0; }
+.cmdk-status .ok { color: var(--ok-ink); }
+.cmdk-status .warn { color: var(--warn-ink); }
+.cmdk-status .bad { color: var(--bad-ink); }
+.cmdk-status .muted { color: var(--fg-muted); font-size: var(--text-sm); }
+
+/* ----------------------------------------------------- entity side panel
+   A customer or a number opened beside the page (nav.js openEntityPanel):
+   from the inline end on a wide screen, a bottom sheet on a phone. Not
+   modal: the page behind stays usable. */
+.xpanel {
+  position: fixed; inset-block: 0; inset-inline-end: 0; z-index: var(--z-drawer, 60);
+  width: min(420px, 100vw); display: flex; flex-direction: column;
+  background: var(--surface); color: var(--fg); border-inline-start: 1px solid var(--line);
+  box-shadow: -12px 0 40px rgb(0 0 0 / .35);
+  transform: translateX(-110%); transition: transform .2s ease; visibility: hidden;
+}
+[dir="ltr"] .xpanel { transform: translateX(110%); }
+.xpanel.open { transform: none; visibility: visible; }
+@media (prefers-reduced-motion: reduce) { .xpanel { transition: none; } }
+@media (max-width: 599px) {
+  .xpanel { inset-block: auto 0; inset-inline: 0; width: 100vw; max-height: 85vh; transform: translateY(110%);
+    border-inline-start: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; }
+  [dir="ltr"] .xpanel { transform: translateY(110%); }
+}
+.xpanel-head { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line-soft); }
+.xpanel-head h2 { flex: 1; margin: 0; font-size: var(--text-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xpanel-body { overflow-y: auto; padding: var(--s3) var(--s4); display: grid; gap: var(--s4); align-content: start; }
+.xpanel-sec h3 { margin: 0 0 var(--s2); font-size: var(--text-sm); color: var(--fg-muted); }
+.xpanel-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--s2); }
+.xpanel-kpi { display: grid; gap: 2px; padding: var(--s2) var(--s3); border: 1px solid var(--line-soft); border-radius: 10px; }
+.xpanel-kpi b { font-size: var(--text-lg, 1.2rem); font-variant-numeric: tabular-nums; }
+.xpanel-kpi span, .xpanel-kpi small { font-size: var(--text-xs); color: var(--fg-muted); }
+.xpanel-row { display: grid; gap: 2px; padding: 8px var(--s2); border-radius: 8px; color: inherit; text-decoration: none; }
+.xpanel-row:hover, .xpanel-row:focus-visible { background: var(--surface-2); }
+.xpanel-row span { font-size: var(--text-xs); color: var(--fg-muted); }
+.xpanel-acts { display: flex; flex-wrap: wrap; gap: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line-soft); }
+
+/* ========================================================== glass
+   DOCFIND's navigation material (glassnav.js): the floating dock and its
+   search button on a phone or touch tablet, the "more" sheet, the command
+   palette, and the drawer when it floats as a sidebar on a desk. One set of
+   tokens, so the material is tuned in one place.
+
+   The glass is darker than it looks like it needs to be, on purpose. The
+   home page's panes are light, and a thin navy film over a light card is a
+   mid-grey on which the muted labels measured 3.5:1. At .72 with the
+   backdrop dimmed to .78 the same labels hold 5.5:1 over the lightest thing
+   on any page, and the active colour 5:1. The glass must not cost the words
+   on it their contrast. */
+:root {
+  /* The dock's active colour: a light sky drawn from the navy the whole
+     interface is built on -- asked for as "DOCFIND blue". Orange stays the
+     colour of actions (buttons, badges); this is the colour of "you are
+     here". Set it to var(--accent-lift) to make the dock orange instead. */
+  --glass-accent: #8CCDEB;
+  --glass-tint: 20 36 50;
+  --glass-bg: rgb(var(--glass-tint) / .72);
+  --glass-solid: #16293A;
+  --glass-edge: rgb(255 255 255 / .09);
+  --glass-rim: rgb(255 255 255 / .15);
+  --glass-blur: 22px;
+  --glass-filter: blur(var(--glass-blur)) saturate(165%) brightness(.78);
+  --glass-shadow: 0 10px 30px rgb(0 0 0 / .34), 0 1px 3px rgb(0 0 0 / .28);
+  --glass-capsule: rgb(140 205 235 / .13);
+  --glass-capsule-edge: rgb(140 205 235 / .22);
+  --glass-dock-h: 64px;
+  --glass-dur: .42s;
+  /* A spring with the faintest overshoot. linear() where the browser has it,
+     which draws the curve exactly; a cubic-bezier near it elsewhere. */
+  --glass-spring: cubic-bezier(.34, 1.28, .64, 1);
+}
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --glass-spring: linear(0, .006, .025 2.8%, .101 6.1%, .539 18.9%, .721 25.3%, .849 31.5%,
+      .937 38.1%, .968 41.8%, .991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001 85.9%, 1);
+  }
+}
+/* Registered so the light on the dock can travel with the capsule. */
+@property --hx { syntax: '<length>'; inherits: true; initial-value: 0px; }
+
+.glass-nav, .glass-nav-search, dialog.glass-sheet {
+  background: var(--glass-solid);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim), inset 0 -1px 0 rgb(0 0 0 / .25);
+  color: var(--fg);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .glass-nav, .glass-nav-search, dialog.glass-sheet {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+}
+
+/* ------------------------------------------------------------ the dock */
+.glass-dock { display: none; }
+@media (max-width: 860px), (pointer: coarse) {
+  .glass-dock {
+    position: fixed; z-index: 35; left: 0; right: 0; margin-inline: auto;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    width: min(calc(100% - 24px), 560px);
+    display: flex; align-items: stretch; gap: 10px;
+    /* The gaps between the two pieces are the page, not the dock. */
+    pointer-events: none;
+    transform-origin: 50% 100%;
+    transition: transform .34s var(--glass-spring);
+    view-transition-name: glass-dock;
+  }
+  .glass-dock > * { pointer-events: auto; }
+  body.has-glassnav { padding-bottom: calc(var(--glass-dock-h) + 26px + env(safe-area-inset-bottom, 0px)); }
+  body.has-glassnav .toast,
+  body.has-glassnav .swbar { bottom: calc(var(--glass-dock-h) + 22px + env(safe-area-inset-bottom, 0px)); }
+  /* No back-to-the-top button beside the dock: pressing the current tab
+     does it, as does tapping the status bar on an iPhone, and the orange
+     circle sat on top of "home". */
+  body.has-glassnav .totop { display: none; }
+  /* The dock carries search and "more"; the header's own copies of them
+     would be the same two things twice. The drawer is still reachable from
+     "more", and the header keeps the bell and the account. */
+  body.has-glassnav .appbar .navtoggle,
+  body.has-glassnav .appbar .cmdk-btn { display: none; }
+}
+@media (min-width: 700px) {
+  .glass-dock { width: min(calc(100% - 48px), 640px); gap: 14px; }
+}
+/* Nor in the installed application, at any size: asked for by name. */
+@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+  .totop { display: none !important; }
+}
+
+.glass-nav {
+  position: relative; flex: 1; min-width: 0; isolation: isolate;
+  display: flex; align-items: stretch;
+  height: var(--glass-dock-h); padding: 5px; border-radius: 999px;
+}
+/* The light on the glass: a soft sheen along the top, brightest over the
+   capsule and moving with it. */
+.glass-nav::after {
+  content: ''; position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+  background:
+    radial-gradient(110px 46px at var(--hx) 0%, rgb(255 255 255 / .10), transparent 72%),
+    linear-gradient(180deg, rgb(255 255 255 / .05), transparent 45%);
+  transition: --hx var(--glass-dur) var(--glass-spring);
+}
+.glass-nav-pill {
+  position: absolute; z-index: 0; top: 5px; bottom: 5px; left: 0;
+  border-radius: 999px;
+  transform: translateX(var(--px, 0px));
+  background: linear-gradient(180deg, rgb(255 255 255 / .13), rgb(255 255 255 / .04) 62%), var(--glass-capsule);
+  border: 1px solid var(--glass-capsule-edge);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .20), inset 0 -1px 0 rgb(0 0 0 / .18),
+    0 4px 14px rgb(0 0 0 / .20), 0 0 18px rgb(140 205 235 / .08);
+  transition: transform var(--glass-dur) var(--glass-spring);
+  view-transition-name: glass-pill;
+}
+.glass-nav-pill.still { transition: none; }
+.glass-nav-item {
+  position: relative; z-index: 1; flex: 1 1 0; min-width: 44px; min-height: 44px;
+  display: grid; place-items: center; align-content: center; gap: 3px;
+  padding: 0 2px; border: 0; border-radius: 999px; background: none; cursor: pointer;
+  color: var(--fg-muted); font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1.15;
+  text-decoration: none; -webkit-tap-highlight-color: transparent;
+}
+.glass-nav-item:hover { color: var(--fg); text-decoration: none; }
+.glass-nav-item:focus-visible { outline: 2px solid var(--glass-accent); outline-offset: -3px; }
+.glass-nav-icon { display: grid; place-items: center; transition: transform var(--glass-dur) var(--glass-spring); }
+.glass-nav-icon .ic { width: 23px; height: 23px; }
+.glass-nav-label {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  transform: translateY(1px);
+  transition: transform var(--glass-dur) var(--glass-spring), opacity .2s linear;
+}
+/* Here: the capsule behind it, the colour, the weight -- three signals, so
+   the colour is never the only one. */
+.glass-nav-item.on { color: var(--glass-accent); }
+.glass-nav-item.on .glass-nav-icon { transform: translateY(-1px) scale(1.08); }
+.glass-nav-item.on .glass-nav-label { font-weight: 750; transform: none; }
+.glass-nav-item:active .glass-nav-icon { transform: scale(.86); transition-duration: .1s; }
+
+.glass-nav-badge {
+  position: absolute; top: 4px; inset-inline-start: calc(50% + 5px);
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 750; line-height: 1; font-variant-numeric: tabular-nums;
+  background: var(--accent); color: var(--accent-ink);
+  box-shadow: 0 0 0 2px rgb(var(--glass-tint));
+}
+.glass-nav-badge.crit { background: var(--bad); }
+.glass-nav-badge.pop { animation: glass-pop .5s var(--glass-spring); }
+@keyframes glass-pop { 0% { transform: scale(.3); } 45% { transform: scale(1.2); } 100% { transform: none; } }
+
+.glass-nav-search {
+  position: relative; flex: none; display: grid; place-items: center;
+  width: var(--glass-dock-h); height: var(--glass-dock-h); border-radius: 50%; cursor: pointer;
+  /* Standing a little proud of the dock: a second, closer shadow. */
+  box-shadow: var(--glass-shadow), 0 6px 16px rgb(0 0 0 / .22), inset 0 1px 0 var(--glass-rim), inset 0 -1px 0 rgb(0 0 0 / .25);
+  transition: transform .3s var(--glass-spring);
+  -webkit-tap-highlight-color: transparent;
+  view-transition-name: glass-search;
+}
+.glass-nav-search .ic { width: 25px; height: 25px; }
+.glass-nav-search::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(60% 50% at 50% 0%, rgb(255 255 255 / .12), transparent 70%);
+}
+.glass-nav-search:active { transform: scale(.88); transition-duration: .1s; }
+.glass-nav-search:focus-visible { outline: 2px solid var(--glass-accent); outline-offset: 3px; }
+
+/* Reading down a page, the dock steps back and folds its labels; it comes
+   back on the way up or when the scrolling stops (glassnav.js). */
+.glass-dock.is-min { transform: translateY(6px) scale(.9); }
+.glass-dock.is-min .glass-nav-label { opacity: 0; transform: translateY(5px); }
+.glass-dock.is-min .glass-nav-icon,
+.glass-dock.is-min .glass-nav-item.on .glass-nav-icon { transform: translateY(8px); }
+.glass-dock.entering { animation: glass-rise .6s var(--glass-spring) both; }
+@keyframes glass-rise { from { transform: translateY(30px) scale(.94); opacity: 0; } }
+
+/* ----------------------------------------------------------- the sheet
+   "More": everything else this account may open. A sheet from the bottom
+   on a phone; above 700px a floating panel over the dock. */
+dialog.glass-sheet {
+  position: fixed; inset: auto 0 0 0; margin: 0 auto;
+  width: 100%; max-width: 100%; max-height: min(84vh, 720px);
+  padding: 8px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  border-radius: 26px 26px 0 0; border-bottom: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+dialog.glass-sheet[open] { display: flex; flex-direction: column; animation: glass-sheet-in .46s var(--glass-spring); }
+dialog.glass-sheet.closing { animation: glass-sheet-out .22s cubic-bezier(.4, 0, 1, 1) forwards; }
+dialog.glass-sheet::backdrop {
+  background: rgb(4 12 20 / .45);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  animation: glass-fade .3s ease;
+}
+dialog.glass-sheet.closing::backdrop { animation: glass-fade-out .22s ease forwards; }
+@keyframes glass-sheet-in { from { transform: translateY(100%); } }
+@keyframes glass-sheet-out { to { transform: translateY(100%); } }
+@keyframes glass-fade { from { opacity: 0; } }
+@keyframes glass-fade-out { to { opacity: 0; } }
+@keyframes glass-pop-in { from { opacity: 0; transform: translateY(14px) scale(.96); } }
+@keyframes glass-pop-out { to { opacity: 0; transform: translateY(10px) scale(.97); } }
+@media (min-width: 700px) {
+  dialog.glass-sheet {
+    bottom: calc(var(--glass-dock-h) + 22px + env(safe-area-inset-bottom, 0px));
+    width: min(500px, calc(100% - 48px)); max-height: min(70vh, 640px);
+    padding-bottom: 18px; border-radius: 26px; border-bottom: 1px solid var(--glass-edge);
+    transform-origin: 50% 100%;
+  }
+  dialog.glass-sheet[open] { animation-name: glass-pop-in; animation-duration: .4s; }
+  dialog.glass-sheet.closing { animation-name: glass-pop-out; }
+  .glass-sheet-grip { display: none; }
+}
+.glass-sheet-grip { flex: none; width: 38px; height: 5px; margin: 2px auto 10px; border-radius: 3px; background: rgb(255 255 255 / .26); }
+.glass-sheet-head { display: flex; align-items: center; gap: var(--s2); }
+.glass-sheet-head h2 { flex: 1; margin: 0; font-size: var(--text-md); }
+.glass-sheet-close {
+  width: 44px; height: 44px; display: grid; place-items: center; flex: none; cursor: pointer;
+  border: 0; border-radius: 50%; background: rgb(255 255 255 / .08); color: var(--fg);
+}
+.glass-sheet-close:focus-visible { outline: 2px solid var(--glass-accent); outline-offset: 2px; }
+.glass-sheet-close .ic { width: 18px; height: 18px; }
+.glass-sheet-body h3 { margin: 16px 4px 8px; font-size: var(--text-xs); font-weight: 650; color: var(--fg-muted); letter-spacing: .02em; }
+.glass-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.glass-tile {
+  position: relative; display: grid; justify-items: center; align-content: start; gap: 7px;
+  min-height: 88px; padding: 12px 6px 10px; border: 1px solid transparent; border-radius: 18px;
+  background: rgb(255 255 255 / .045); color: var(--fg); cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.35; text-align: center; text-decoration: none;
+  animation: glass-tile-in .44s var(--glass-spring) both;
+  animation-delay: calc(var(--i, 0) * 22ms);
+  -webkit-tap-highlight-color: transparent;
+}
+.glass-tile:hover { background: rgb(255 255 255 / .08); text-decoration: none; }
+.glass-tile:active { transform: scale(.96); }
+.glass-tile:focus-visible { outline: 2px solid var(--glass-accent); outline-offset: 2px; }
+.glass-tile[aria-current="page"] { background: var(--glass-capsule); border-color: var(--glass-capsule-edge); color: var(--glass-accent); }
+.glass-tile-icon {
+  position: relative; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
+  background: linear-gradient(180deg, rgb(255 255 255 / .12), rgb(255 255 255 / .03));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .16), 0 2px 6px rgb(0 0 0 / .18);
+}
+.glass-tile-icon .ic { width: 22px; height: 22px; }
+.glass-tile .glass-nav-badge { top: -5px; inset-inline-start: auto; inset-inline-end: -8px; }
+@keyframes glass-tile-in { from { opacity: 0; transform: translateY(10px) scale(.95); } }
+.glass-sheet-foot { display: flex; justify-content: center; margin-top: var(--s4); }
+
+/* ----------------------------------------------------- the palette
+   The search the round button opens, in the same material. */
+dialog.cmdk { background: var(--glass-solid); border-color: var(--glass-edge);
+  box-shadow: 0 24px 60px rgb(0 0 0 / .45), inset 0 1px 0 var(--glass-rim); }
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  dialog.cmdk { background: rgb(var(--glass-tint) / .84); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
+}
+dialog.cmdk[open] { animation: glass-drop-in .36s var(--glass-spring); }
+dialog.cmdk::backdrop { -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+@keyframes glass-drop-in { from { opacity: 0; transform: translateY(-10px) scale(.98); } }
+.cmdk-item[aria-selected="true"] { background: var(--glass-capsule); box-shadow: inset 0 0 0 1px var(--glass-capsule-edge); }
+
+/* --------------------------------------------------- the desk sidebar
+   On a wide screen with a mouse the drawer is the navigation, and it takes
+   the same material: a floating glass column held off the window's edges,
+   the current page in the same capsule the dock uses. Pinned, the page
+   makes room for the column and its margin. */
+@media (min-width: 1100px) and (pointer: fine) {
+  .navsheet {
+    inset-block: 12px; right: 12px; border-radius: 24px;
+    border: 1px solid var(--glass-edge);
+    background: var(--glass-solid);
+    box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim);
+    transform: translateX(calc(100% + 24px));
+  }
+  body.nav-pinned { padding-right: calc(var(--nav-w) + 24px); }
+  body.nav-pinned .navsheet { box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim); }
+  .navsheet a.dest { border-radius: 14px; }
+  .navsheet a.dest.on {
+    background: linear-gradient(180deg, rgb(255 255 255 / .10), rgb(255 255 255 / .03)), var(--glass-capsule);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .16), inset 0 0 0 1px var(--glass-capsule-edge);
+  }
+  .navsheet a.dest.on .t { color: var(--glass-accent); }
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  @media (min-width: 1100px) and (pointer: fine) {
+    .navsheet { background: var(--glass-bg); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
+  }
+}
+
+/* --------------------------------------------------- the mega menu
+   meganav.js: on a desk a group of the glass sidebar opens as a panel beside
+   it, its links beside a card with a picture of the entry pointed at (or the
+   group's first). The panel is the sidebar's own glass, so the two read as
+   one material; the group it belongs to keeps the capsule while it is open. */
+@media (min-width: 1100px) and (pointer: fine) {
+  body.nav-mega:not(.nav-searching) .navgroup:not(.navsites) .navgroup-body { display: none; }
+  body.nav-mega:not(.nav-searching) .navgroup:not(.navsites) .navgroup-head .ic:last-child { transform: none; }
+  body.nav-mega .navgroup-head[aria-expanded="true"] {
+    background: var(--glass-capsule); box-shadow: inset 0 0 0 1px var(--glass-capsule-edge);
+  }
+  body.nav-mega .navgroup-head.has-on b { color: var(--glass-accent); }
+}
+.mega {
+  position: fixed; z-index: calc(var(--z-drawer) + 1);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 250px); gap: 12px;
+  max-height: calc(100vh - 24px); padding: 12px;
+  border: 1px solid var(--glass-edge); border-radius: 24px;
+  background: var(--glass-solid);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim);
+  transform-origin: right center;
+  animation: mega-in .42s var(--glass-spring) both;
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .mega { background: var(--glass-bg); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
+}
+.mega.out { animation: glass-fade-out .14s linear forwards; }
+@keyframes mega-in { from { opacity: 0; transform: translateX(14px) scale(.985); } }
+.mega-links { display: grid; align-content: start; gap: 2px; min-height: 0; overflow-y: auto; }
+.mega a.dest {
+  display: block; padding: 12px var(--s3); border-radius: 14px;
+  color: var(--fg); text-decoration: none;
+  transition: background var(--fast) var(--ease);
+}
+.mega a.dest:hover { background: var(--glass-capsule); text-decoration: none; }
+.mega a.dest:focus-visible { background: var(--glass-capsule); outline: 2px solid var(--glass-accent); outline-offset: -2px; }
+.mega a.dest.on {
+  background: linear-gradient(180deg, rgb(255 255 255 / .10), rgb(255 255 255 / .03)), var(--glass-capsule);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .16), inset 0 0 0 1px var(--glass-capsule-edge);
+}
+.mega a.dest .t { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; }
+.mega a.dest.on .t { color: var(--glass-accent); }
+.mega a.dest .d { margin-top: 2px; font-size: var(--text-sm); color: var(--fg-muted); }
+.mega .ic { width: 17px; height: 17px; flex: none; }
+.mega-links.in .navrow { animation: mega-link .46s var(--glass-spring) both; animation-delay: calc(var(--i, 0) * 32ms); }
+@keyframes mega-link { from { opacity: 0; transform: translateX(10px); } }
+/* The card. The picture covers it; under the picture, and in its place for a
+   group of somebody's own making (no pictures), a gradient in the app's own
+   blues, so a card is never a grey box. */
+.mega-card {
+  position: relative; overflow: hidden; min-height: 280px; border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 20% 12%, #9fdcf2 0%, transparent 55%),
+    radial-gradient(110% 110% at 85% 45%, #1d7ea6 0%, transparent 62%),
+    #06202d;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .08);
+}
+/* Two pictures stacked; the next fades in over the last (meganav.js). */
+.mega-pic {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  opacity: 0; transform: scale(1.045);
+  transition: opacity .34s var(--ease), transform .7s var(--glass-spring);
+}
+.mega-card.has-pic .mega-pic.on { opacity: 1; transform: none; }
+/* The words sit at the foot of the card over a shade deep enough for white
+   text on the lightest picture -- a port under a clear sky, a white desk. */
+.mega-card-text {
+  position: absolute; inset-inline: 0; bottom: 0; display: grid; gap: 4px; padding: 56px 18px 18px;
+  color: #fff; background: linear-gradient(to top, rgb(4 12 20 / .86) 0%, rgb(4 12 20 / .62) 55%, transparent 100%);
+}
+.mega-card-ic .ic { width: 26px; height: 26px; }
+.mega-card b { font-size: 20px; line-height: 1.3; }
+.mega-card-d { font-size: var(--text-sm); line-height: 1.6; color: rgb(255 255 255 / .9); }
+/* An entry and its −, in the panel as in the sidebar. */
+.mega .navrow { display: flex; align-items: center; gap: 2px; }
+.mega .navrow a.dest { flex: 1; min-width: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .mega, .mega-links.in .navrow { animation: glass-fade .12s linear both; }
+  .mega-pic { transform: none; transition: opacity .12s linear; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .mega { background: var(--glass-solid) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
+@media (forced-colors: active) {
+  .mega { border-color: CanvasText; }
+  .mega a.dest.on { outline: 2px solid Highlight; }
+}
+@media print { .mega { display: none !important; } }
+
+/* ------------------------------------------------ cinematic words
+   The home page's greeting: each word drifts down out of a heavy blur and
+   settles, slow enough to read as a camera pulling focus (useplanes'
+   «Cinematic Text»: 1.4s a word, 0.11s apart, after 0.2s). Less motion: the
+   words fade in together. */
+.cine-w {
+  display: inline-block;
+  animation: cine-in 1.4s cubic-bezier(.16, 1, .3, 1) both;
+  animation-delay: calc(.2s + var(--i, 0) * .11s);
+}
+@keyframes cine-in { from { opacity: 0; transform: translateY(22px) scale(1.04); filter: blur(28px); } }
+@media (prefers-reduced-motion: reduce) {
+  .cine-w { animation: glass-fade .22s ease-out .2s both; }
+}
+
+/* ------------------------------------------------ ink
+   An assistant's answer develops like ink rather than appearing (useplanes'
+   «Streaming Message»): a soft-edged mask sweeps down it with an iridescent
+   glow riding the edge. docfindInk (chat.js) sets the time from the answer's
+   height and takes the class off when the sweep ends; where the browser
+   cannot animate the edge, or less motion was asked for, it is not added. */
+@property --ink { syntax: '<length-percentage>'; inherits: true; initial-value: 0%; }
+.ink {
+  position: relative;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(var(--ink) - 3em), transparent var(--ink));
+  mask-image: linear-gradient(to bottom, #000 calc(var(--ink) - 3em), transparent var(--ink));
+  animation: ink-sweep var(--ink-dur, 1.6s) cubic-bezier(.4, 0, .2, 1) both;
+}
+.ink::after {
+  content: ""; position: absolute; inset-inline: 0; height: 3em; top: calc(var(--ink) - 3.4em);
+  pointer-events: none; mix-blend-mode: screen; filter: blur(10px);
+  background: linear-gradient(90deg, #8ccdeb, #c9b6ff 30%, #ffb3cf 55%, #ffcf99 78%, #9fe3c8);
+  animation: ink-glow var(--ink-dur, 1.6s) linear both;
+}
+@keyframes ink-sweep { from { --ink: 0%; } to { --ink: calc(100% + 3em); } }
+@keyframes ink-glow { from { opacity: .6; } 85% { opacity: .5; } to { opacity: 0; } }
+
+/* ------------------------------------------------ between pages
+   Where the browser can, the dock stays put between pages and the capsule
+   glides from where it was to where it now belongs; the page underneath
+   crossfades quickly. Nowhere else changes. */
+@media (max-width: 860px), (pointer: coarse) {
+  @view-transition { navigation: auto; }
+}
+::view-transition-group(glass-pill) { animation-duration: var(--glass-dur); animation-timing-function: var(--glass-spring); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; }
+
+/* ------------------------------------------------ asked for less
+   Less motion: nothing travels -- the capsule and the sheets appear and fade
+   -- and the dock does not fold while reading. Less transparency, or more
+   contrast: a solid surface with the same shape. */
+@media (prefers-reduced-motion: reduce) {
+  @view-transition { navigation: none; }
+  .glass-dock, .glass-nav-pill, .glass-nav-icon, .glass-nav-label, .glass-nav-search, .glass-nav::after { transition-duration: .01s !important; }
+  .glass-dock.entering, dialog.glass-sheet[open], dialog.cmdk[open], .glass-tile { animation: glass-fade .2s linear both !important; }
+  dialog.glass-sheet.closing { animation: glass-fade-out .15s linear forwards !important; }
+  .glass-dock.is-min { transform: none; }
+  .glass-dock.is-min .glass-nav-label { opacity: 1; transform: none; }
+  .glass-dock.is-min .glass-nav-icon { transform: none; }
+  .glass-nav-item.on .glass-nav-icon { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .glass-nav, .glass-nav-search, dialog.glass-sheet, dialog.cmdk, .navsheet {
+    background: var(--glass-solid) !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  }
+}
+@media (forced-colors: active) {
+  .glass-nav-pill { border: 2px solid Highlight; background: none; }
+  .glass-nav-item.on { color: Highlight; }
+}
+dialog.kbd-help { padding: var(--s4); background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; max-width: min(460px, calc(100vw - 32px)); }
+dialog.kbd-help::backdrop { background: rgb(0 0 0 / .45); }
+dialog.kbd-help h2 { margin: 0 0 var(--s3); font-size: var(--text-md); }
+dialog.kbd-help table { border-collapse: collapse; width: 100%; margin-bottom: var(--s3); font-size: var(--text-sm); }
+dialog.kbd-help td { padding: 5px 4px; border-bottom: 1px solid var(--line-soft); }
+dialog.kbd-help kbd { direction: ltr; display: inline-block; padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; font: inherit; font-size: var(--text-xs); }
+
+/* ------------------------------------------------- notification centre
+   The bell (notifycenter.js) sits beside the search button; its panel drops
+   from the header on a wide screen and rises as a sheet on a phone. A
+   critical row -- a service down, administrators only -- is the one thing in
+   red; important rows carry the accent on their edge. */
+.bell-btn {
+  position: relative; display: inline-grid; place-items: center; margin-inline-start: var(--s2);
+  width: 36px; height: 36px; border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--line-soft); background: var(--surface-2); color: var(--fg-muted); cursor: pointer;
+}
+.bell-btn:hover, .bell-btn:focus-visible, .bell-btn[aria-expanded="true"] { color: var(--fg); border-color: var(--line); }
+.bell-btn .ic { width: 17px; height: 17px; }
+@media (max-width: 599px) { .bell-btn { width: 44px; height: 44px; } }
+.bell-count {
+  position: absolute; top: -4px; inset-inline-end: -4px; min-width: 18px; height: 18px; padding: 0 4px;
+  display: grid; place-items: center; border-radius: 9px; font-size: 11px; font-weight: 700; line-height: 1;
+  background: var(--accent); color: var(--accent-ink); font-variant-numeric: tabular-nums;
+}
+.bell-count.crit { background: var(--bad); color: #fff; }
+.bellpanel {
+  position: fixed; top: 60px; inset-inline-end: var(--s4); z-index: var(--z-popover, 60);
+  width: min(400px, calc(100vw - 24px)); max-height: min(75vh, 640px); display: flex; flex-direction: column;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 14px); box-shadow: 0 24px 60px rgb(0 0 0 / .45);
+}
+@media (max-width: 599px) {
+  .bellpanel { top: auto; bottom: 0; inset-inline: 0; width: 100vw; max-height: 85vh; border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
+.bellpanel-head { display: flex; align-items: center; gap: var(--s1, 4px); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line-soft); }
+.bellpanel-head h2 { flex: 1; margin: 0; font-size: var(--text-md); outline: 0; }
+.bellpanel-head .btn .ic { width: 14px; height: 14px; }
+.bellpanel-body { overflow-y: auto; padding: var(--s2) var(--s3) var(--s3); display: grid; gap: var(--s3); align-content: start; }
+.bell-sec h3 { margin: var(--s2) 0 6px; font-size: var(--text-xs); color: var(--fg-muted); letter-spacing: .02em; }
+.bell-sec.attn h3 { color: var(--fg); }
+.bell-row { position: relative; display: flex; align-items: flex-start; gap: 4px; border-radius: 10px; padding: 2px; border-inline-start: 3px solid transparent;
+  border-start-start-radius: 0; border-end-start-radius: 0; }
+/* The "new version" prompt sits above everything; while the panel is open
+   it would cover the list, and it comes back when the panel closes. */
+body.bell-open .swbar { visibility: hidden; }
+.bell-row:hover { background: var(--surface-2); }
+.bell-row.imp { border-inline-start-color: var(--accent); }
+.bell-row.crit { border-inline-start-color: var(--bad); background: var(--bad-bg); }
+.bell-row.crit b { color: var(--bad-ink); }
+.bell-row.read .bell-main b { font-weight: 500; color: var(--fg-muted); }
+.bell-main { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 6px 8px; color: inherit; text-decoration: none; }
+.bell-main b { font-weight: 650; overflow-wrap: anywhere; }
+.bell-n { font-weight: 500; color: var(--fg-muted); font-size: var(--text-xs); }
+.bell-body { font-size: var(--text-sm); color: var(--fg-muted); white-space: pre-line; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bell-meta { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; font-size: var(--text-xs); color: var(--fg-muted); }
+.bell-quiet { display: inline-flex; gap: 3px; align-items: center; }
+.bell-quiet .ic { width: 12px; height: 12px; }
+.bell-acts { display: flex; gap: 2px; padding-top: 4px; flex: none; }
+.bell-acts .btn-icon { width: 32px; height: 32px; }
+@media (max-width: 599px) { .bell-acts .btn-icon { width: 40px; height: 40px; } }
+.bell-acts .ic { width: 15px; height: 15px; }
+.bell-snooze { position: absolute; inset-inline-end: 8px; top: 40px; z-index: 2; display: grid; min-width: 150px; padding: 4px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-lg); }
+.bell-snooze button { padding: 8px 10px; border: 0; background: none; color: var(--fg); font: inherit; font-size: var(--text-sm); text-align: start; border-radius: 6px; cursor: pointer; }
+.bell-snooze button:hover, .bell-snooze button:focus-visible { background: var(--surface-3); }
+.bell-digest summary { cursor: pointer; padding: 6px 8px; font-size: var(--text-sm); color: var(--fg-muted); }
+.bell-empty { display: grid; justify-items: center; gap: 4px; padding: var(--s5, 32px) var(--s3); text-align: center; }
+.bell-empty .ic { width: 28px; height: 28px; color: var(--ok-ink); }
+.bell-empty p { margin: 0; }
+.toast-act { margin-inline-start: auto; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface-2); color: var(--fg); font: inherit; font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.toast-act:hover, .toast-act:focus-visible { border-color: var(--accent); }
+/* The network around a customer in the side panel (nav.js xgraph). Nodes
+   come in one after another on first draw; a customer on the outer ring is a
+   button to its own panel. The list under it says the same in text. */
+.xgraph { width: 100%; height: auto; display: block; }
+.xg-edges line { stroke: var(--line); stroke-linecap: round; }
+.xg-edges line.thin { stroke-width: 1; opacity: .7; }
+.xg-edges line.dash { stroke-dasharray: 3 4; }
+.xg-node circle { fill: var(--surface-3); stroke: var(--line); stroke-width: 1.5; }
+.xg-node text { fill: var(--fg-muted); font-size: 10.5px; font-family: inherit; }
+.xg-node.center circle { fill: var(--glass-accent, var(--accent)); stroke: none; }
+.xg-node.center text { fill: var(--fg); font-weight: 700; font-size: 12px; }
+.xg-node.expert circle { fill: var(--info-bg, var(--surface-2)); stroke: var(--info-ink, var(--line)); }
+.xg-node.expert text { fill: var(--fg); }
+.xg-node.doc circle, .xg-node.mail circle { fill: var(--surface-2); stroke-dasharray: 2 2; }
+.xg-node.link { cursor: pointer; }
+.xg-node.link circle { stroke: var(--glass-accent, var(--accent)); }
+.xg-node.link:hover circle, .xg-node.link:focus-visible circle { fill: var(--glass-capsule, var(--surface-3)); stroke-width: 2.5; }
+.xg-node:focus-visible { outline: none; }
+.xg-node { animation: xg-in .4s ease both; animation-delay: calc(var(--i, 0) * 30ms); transform-box: fill-box; transform-origin: center; }
+@keyframes xg-in { from { opacity: 0; transform: scale(.6); } }
+@media (prefers-reduced-motion: reduce) { .xg-node { animation: none; } }
+.xgraph-list { margin: var(--s2) 0 0; padding-inline-start: 1.1em; display: grid; gap: 4px; font-size: var(--text-sm); color: var(--fg-muted); }
+.xgraph-list b { color: var(--fg); }
+.linkish { border: 0; background: none; padding: 0; font: inherit; color: var(--glass-accent, var(--accent)); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+/* Investigating an unusual day (home.html investigateDay). */
+dialog.inv-dlg { width: min(640px, calc(100vw - 24px)); max-height: min(80vh, 720px); padding: 0; overflow: hidden;
+  background: var(--glass-solid, var(--surface)); color: var(--fg); border: 1px solid var(--glass-edge, var(--line));
+  border-radius: 20px; box-shadow: var(--glass-shadow, var(--shadow-lg)); }
+dialog.inv-dlg[open] { display: flex; flex-direction: column; animation: glass-pop-in .35s var(--glass-spring, ease); }
+dialog.inv-dlg::backdrop { background: rgb(4 12 20 / .45); }
+.inv-head { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line-soft); }
+.inv-head h2 { flex: 1; margin: 0; font-size: var(--text-md); }
+.inv-body { overflow-y: auto; padding: var(--s3) var(--s4) var(--s4); line-height: 1.8; }
+.inv-body h3 { margin: var(--s4) 0 var(--s2); font-size: var(--text-sm); color: var(--fg-muted); }
+.inv-wrap { overflow-x: auto; }
+.inv-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.inv-table th, .inv-table td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); text-align: start; }
+.inv-table thead th { color: var(--fg-muted); font-weight: 600; font-size: var(--text-xs); }
+.inv-table td.up { color: var(--ok-ink); font-weight: 700; }
+.inv-table td.down { color: var(--bad-ink); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { dialog.inv-dlg[open] { animation: none; } }
+.wl-spark { width: 48px; height: 14px; display: block; }
+.wl-spark rect { fill: var(--info-ink, var(--fg-muted)); }
+/* This device cannot reach the server (nav.js setConn): a pill in the
+   header, and the glass dock dimmed a little -- the page is a copy now. */
+.conn-pill { display: inline-flex; align-items: center; gap: 6px; margin-inline-start: var(--s2);
+  padding: 4px 10px; border-radius: 999px; font-size: var(--text-xs); font-weight: 700;
+  background: var(--warn-bg); color: var(--warn-ink); border: 1px solid currentColor; }
+.conn-pill .ic { width: 14px; height: 14px; }
+body.is-offline .glass-nav, body.is-offline .glass-nav-search { filter: saturate(.5); }
+/* The "remind me" menu (notifycenter.js remindMe), in the dock's material. */
+.rem-menu { position: fixed; z-index: var(--z-toast, 70); display: grid; min-width: 220px; padding: 6px;
+  background: var(--glass-solid, var(--surface)); color: var(--fg); border: 1px solid var(--glass-edge, var(--line));
+  border-radius: 14px; box-shadow: var(--glass-shadow, var(--shadow-lg)); animation: glass-pop-in .3s var(--glass-spring, ease); }
+.rem-menu > button { padding: 10px 12px; min-height: 44px; border: 0; border-radius: 9px; background: none; color: inherit;
+  font: inherit; font-size: var(--text-sm); text-align: start; cursor: pointer; }
+.rem-menu > button:hover, .rem-menu > button:focus-visible { background: var(--glass-capsule, var(--surface-3)); outline: 0; }
+.rem-custom { display: flex; gap: 6px; align-items: end; padding: 8px 6px 4px; border-top: 1px solid var(--line-soft); margin-top: 4px; }
+.rem-custom label { flex: 1; display: grid; gap: 4px; font-size: var(--text-xs); color: var(--fg-muted); }
+.rem-custom input { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); color-scheme: dark; }
+@media (prefers-reduced-motion: reduce) { .rem-menu { animation: none; } }
+
+/* ------------------------------------------------------ «امروز شما»
+   The home page's briefing (briefing.js): one line per thing waiting, the
+   most urgent first, each with the one action it needs. Tone is carried by
+   the icon's colour and a word in the line, never by colour alone. */
+.brief { margin-top: var(--s4); padding: var(--s3) var(--s4); border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg, 14px); background: var(--surface); }
+.brief-head { display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap; margin-bottom: var(--s2); }
+.brief-head h2 { margin: 0; font-size: var(--text-md); }
+.brief-date { font-size: var(--text-sm); color: var(--fg-muted); }
+.brief-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.brief-row { display: flex; align-items: center; gap: var(--s3); padding: 8px 4px; border-top: 1px solid var(--line-soft); }
+.brief-row:first-child { border-top: 0; }
+.brief-row > .ic { width: 18px; height: 18px; flex: none; color: var(--fg-muted); }
+.brief-row > span { flex: 1; min-width: 0; line-height: 1.7; }
+.brief-row.tone-bad > .ic { color: var(--bad-ink); }
+.brief-row.tone-bad > span { color: var(--bad-ink); font-weight: 600; }
+.brief-row.tone-warn > .ic { color: var(--warn-ink); }
+.brief-row.tone-ok > .ic, .brief-calm > .ic { color: var(--ok-ink); }
+.brief-row.tone-ok > span { color: var(--fg-muted); }
+.brief-act { flex: none; }
+.brief-sk { height: 22px; margin: 8px 0; border-radius: 6px; background: var(--surface-2);
+  background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / .05), transparent);
+  background-size: 200% 100%; animation: brief-sk 1.4s ease-in-out infinite; }
+.brief-sk:nth-child(2) { width: 80%; }
+.brief-sk:nth-child(3) { width: 60%; }
+@keyframes brief-sk { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .brief-sk { animation: none; } }
+@media (max-width: 599px) { .brief { padding: var(--s3); } .brief-row { flex-wrap: wrap; } .brief-act { margin-inline-start: auto; } }
+
+/* ---- date picker (datepick.js) ----------------------------------------------
+   Moved here from dashboard.html so every page with a date field gets the same
+   picker; the evaluation page had the fields and none of this, and drew two
+   bare browser boxes. Fixed and placed from the field's rect in JS: widgets
+   clip their rounded corners with overflow:hidden, which cropped an absolute
+   popover away in a short widget. */
+.datewrap { position: relative; }
+.datefield { cursor: pointer; caret-color: transparent; }
+.datepick {
+  position: fixed; z-index: var(--z-popover); top: 0; left: 0;
+  width: 252px; padding: 10px; border-radius: var(--radius-lg);
+  background: rgb(24 34 58 / .82); border: 1px solid rgb(255 255 255 / .09);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgb(255 255 255 / .06);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .datepick {
+    background: rgb(24 34 58 / .62);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    backdrop-filter: blur(22px) saturate(180%);
+  }
+}
+.dp-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.dp-title { flex: 1; text-align: center; font-size: 14px; font-weight: 650; }
+.dp-nav {
+  width: 26px; height: 26px; border: 1px solid var(--line-soft); border-radius: 7px;
+  background: var(--surface-2); color: var(--fg); cursor: pointer; font-size: 16px; line-height: 1;
+}
+.dp-nav:hover { border-color: var(--accent); }
+.dp-week, .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dp-week span { text-align: center; font-size: 11.5px; color: var(--fg-muted); padding: 3px 0; }
+.dp-grid .day {
+  height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--fg);
+  font-size: 13.5px; font-family: inherit; cursor: pointer;
+}
+.dp-grid .day:hover { background: var(--surface-2); }
+.dp-grid .day.now { box-shadow: inset 0 0 0 1px var(--accent); }
+.dp-grid .day.sel { background: var(--accent); color: #1a0f04; font-weight: 650; }
+.dp-grid .day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dp-foot { margin-top: 8px; text-align: center; }
+.dp-today {
+  border: 0; background: none; color: var(--accent); font-size: 13px; cursor: pointer;
+  font-family: inherit; padding: 4px 8px; border-radius: 6px;
+}
+.dp-today:hover { background: var(--accent-soft); }

@@ -1,0 +1,1284 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#142F40">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="پیام‌رسان">
+<title>تنظیمات | پیام‌رسان</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+  /* A page per category, as settings are laid out everywhere else: the
+     categories down the side, grouped into one's own and the system's, and one
+     category's cards beside them at /settings/<category>. The app bar follows
+     the whole layout; the cards keep the single form column. */
+  body { --page-max: var(--content-read); }
+  .set-layout {
+    max-width: var(--page-max); margin-inline: auto; padding: var(--s4);
+    display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: var(--s5); align-items: start;
+  }
+  .set-nav { position: sticky; top: calc(76px + env(safe-area-inset-top, 0px)); display: grid; gap: 2px; }
+  .set-nav h2 {
+    margin: var(--s4) var(--s3) var(--s1); font-size: var(--text-xs); font-weight: 650;
+    color: var(--fg-faint); letter-spacing: .02em;
+  }
+  .set-nav h2:first-child { margin-top: 0; }
+  .set-nav a {
+    display: flex; align-items: center; gap: var(--s2); padding: 8px var(--s3);
+    border-radius: var(--radius); color: var(--fg-muted); text-decoration: none; font-size: var(--text-sm);
+  }
+  .set-nav a:hover { background: var(--surface-2); color: var(--fg); }
+  .set-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--fg); font-weight: 650; }
+  .set-nav a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .set-nav .ic { width: 16px; height: 16px; flex: none; }
+  .set-title { margin: 0; font-size: var(--text-lg); }
+  .set-lede { margin: 2px 0 0; color: var(--fg-muted); font-size: var(--text-sm); }
+  /* A card of another category: built only when its category shares a
+     template with this one (the account template holds three), and kept out
+     of sight rather than out of the DOM, so its wiring still finds it. */
+  .off-sec { display: none !important; }
+  @media (max-width: 760px) {
+    .set-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+    .set-nav { position: static; display: flex; gap: var(--s2); overflow-x: auto; padding-bottom: var(--s1); }
+    .set-nav h2 { display: none; }
+    .set-nav a { white-space: nowrap; border: 1px solid var(--line); border-radius: var(--radius-full); padding: 6px var(--s3); }
+  }
+
+  /* The permission matrix. Wider than the form column it sits over, because
+     it is a label-and-control grid rather than a stack of fields. */
+  .perm-dlg {
+    border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+    background: var(--surface); color: var(--fg);
+    width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px);
+  }
+  .perm-dlg::backdrop { background: rgba(0,0,0,.55); }
+  .perm-dlg form { display: flex; flex-direction: column; max-height: calc(100vh - 96px); }
+  /* The list scrolls, the heading and the buttons do not: with forty rows,
+     a dialog that scrolls as a whole hides the save button exactly when
+     somebody has finished deciding. */
+  .perm-body { overflow-y: auto; flex: 1 1 auto; margin: 6px 0 10px; }
+  .perm-actions, .perm-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .perm-foot { padding-top: 10px; border-top: 1px solid var(--line); }
+  .perm-group { margin: 0 0 14px; }
+  .perm-group > h3 {
+    font-size: .95rem; margin: 0 0 6px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .perm-row {
+    display: grid; grid-template-columns: minmax(0,1fr) auto;
+    gap: 8px; align-items: center; padding: 4px 0;
+  }
+  .perm-row + .perm-row { border-top: 1px dashed var(--line); }
+  .perm-row select { min-width: 190px; }
+  /* An override is visibly an override: the point of the third state is that
+     you can see at a glance which rows somebody has decided by hand. */
+  .perm-row[data-set="allow"] { background: color-mix(in srgb, var(--ok) 10%, transparent); }
+  .perm-row[data-set="deny"]  { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+  .perm-row .lock { font-size: .8rem; opacity: .75; }
+  @media (max-width: 520px) {
+    .perm-row { grid-template-columns: 1fr; }
+    .perm-row select { min-width: 0; width: 100%; }
+  }
+
+  /* minmax(0, 1fr) so the track can shrink below its content: an auto/1fr
+     track carries min:auto and the user table's width was pushing the whole
+     page into a sideways scroll on a phone. Same fix as dashboard.html and
+     evaluation.html. */
+  main {
+    display: grid; grid-template-columns: minmax(0, 1fr);
+    gap: var(--s4); max-width: var(--content-form); min-width: 0;
+  }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--s3); align-items: end;
+  }
+  .msg { margin: 0 var(--s4) var(--s4); }
+  /* Each user's actions are a row of small buttons; on a phone they stack, and
+     the created date is the first column worth losing. */
+  @media (max-width: 640px) {
+    td .btn { display: block; width: 100%; margin-bottom: var(--s1); }
+    th:nth-child(4), td:nth-child(4) { display: none; }
+  }
+  .users-bar { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; padding: 0 var(--s4) var(--s3); }
+  .users-bar .input { flex: 1; min-width: 200px; }
+  .users-pager { display: flex; gap: var(--s3); align-items: center; justify-content: center; padding: var(--s3); }
+  .role-row { display: flex; gap: var(--s2); align-items: center; padding: 3px 0; }
+  .chip-sm { font-size: .75em; padding: 0 6px; }
+</style>
+</head>
+
+<body>
+<header class="appbar">
+  <!-- Mark and visible title removed from the header; the heading stays,
+       said rather than shown -- see .sr-only. -->
+  <h1 class="sr-only">تنظیمات</h1>
+  <!-- Destinations: built by nav.js, from the same list the phone sheet
+       uses. These were two loose anchors with no <nav> around them, no
+       accessible name, and nothing saying which page you were on. -->
+  <span class="spacer"></span>
+  <span id="who" class="hint collapses" style="margin:0"></span>
+  <button class="btn btn-ghost btn-sm collapses" id="signout">خروج</button>
+</header>
+
+<script src="/nav.js"></script>
+<script src="/twostep.js"></script>
+<script src="/roles.js"></script>
+<script src="/passkeys.js"></script>
+<script src="/datepick.js"></script>
+<script src="/useredit.js"></script>
+<div class="set-layout">
+<nav class="set-nav" id="setNav" aria-label="بخش‌های تنظیمات"></nav>
+<main id="main">
+  <div class="card"><div class="skel"><i></i><i style="width:78%"></i><i style="width:88%"></i></div></div>
+</main>
+</div>
+
+<!-- Notifications on this person's own devices, delivered with the app closed.
+     The server sends through each device's push service (Apple, Microsoft,
+     Google, Mozilla); this card is where a device is switched on, tested and
+     removed. The instructions are per platform because the failures are:
+     an iPhone gets nothing from a Safari tab, and Chrome on Windows gets
+     nothing once it is fully closed. -->
+<template id="tplPush">
+  <section class="card" data-sec="notifications" id="notifications">
+    <h2 class="card-head">
+      <svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg>
+      <span>اعلان روی گوشی و رایانه</span>
+      <span class="spacer"></span>
+      <span class="hint" id="pushState"></span>
+    </h2>
+    <div class="card-body" style="display:grid;gap:var(--s3)">
+      <p class="hint" id="pushWhy" style="margin:0"></p>
+      <div style="display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center">
+        <button type="button" class="btn btn-sm" id="pushOn">روشن کردن روی این دستگاه</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="pushOff" hidden>خاموش کردن روی این دستگاه</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="pushTest" hidden>ارسال اعلان آزمایشی</button>
+      </div>
+      <div class="msg notice hidden" id="pushMsg" role="status"></div>
+      <div id="pushDevices"></div>
+      <div id="pushTopics" hidden>
+        <div class="label">چه چیزهایی به شما اعلان شود</div>
+        <div id="pushTopicList"></div>
+        <div class="label" style="margin-top:var(--s3)">ساعت‌های آرام</div>
+        <p class="hint" style="margin:0 0 var(--s2)">در این ساعت‌ها اعلان می‌رسد و در فهرست اعلان‌ها می‌ماند، ولی دستگاه صدا و لرزش ندارد.</p>
+        <div style="display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center">
+          <label for="quietFrom">از ساعت</label><select class="select" id="quietFrom" style="width:auto"></select>
+          <label for="quietTo">تا ساعت</label><select class="select" id="quietTo" style="width:auto"></select>
+          <button type="button" class="btn btn-sm" id="quietSave">ذخیره</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="quietOff">بدون ساعت آرام</button>
+        </div>
+      </div>
+      <details>
+        <summary class="hint">اگر اعلان نمی‌رسد</summary>
+        <ul class="hint" style="margin:var(--s2) 0 0;padding-inline-start:1.2em;line-height:1.9">
+          <li><b>آیفون:</b> iOS نسخه ۱۶٫۴ یا بالاتر. در Safari دکمه «Share» و بعد
+            «Add to Home Screen»، برنامه را از صفحه اصلی باز کنید و اینجا روشن کنید.
+            در زبانه Safari اعلان پس‌زمینه وجود ندارد.</li>
+          <li><b>ویندوز:</b> Edge بهترین گزینه است. در تنظیمات Edge، بخش System،
+            «Continue running background extensions and apps when Microsoft Edge is closed»
+            را روشن کنید. Chrome فقط وقتی در پس‌زمینه اجرا می‌شود اعلان می‌گیرد.</li>
+          <li>حالت «مزاحم نشوید» یا Focus دستگاه اعلان‌ها را پنهان می‌کند.</li>
+          <li>برای آزمایش واقعی: «ارسال اعلان آزمایشی» را بزنید، برنامه را کامل ببندید و چند ثانیه صبر کنید.</li>
+        </ul>
+      </details>
+    </div>
+  </section>
+</template>
+
+<template id="tplAccount">
+  <section class="card" data-sec="account">
+    <h2 class="card-head">
+      <span>حساب من</span>
+    </h2>
+    <div class="card-body acct">
+      <div class="acct-id">
+        <div class="ava-wrap">
+          <img id="myAva" class="ava" alt="" hidden>
+          <svg id="myAvaPh" class="ava ava-ph" aria-hidden="true"><use href="#i-avatar"/></svg>
+          <button type="button" class="ava-edit" id="avaPick" aria-label="تغییر تصویر پروفایل">
+            <svg aria-hidden="true"><use href="#i-camera"/></svg>
+          </button>
+          <input type="file" id="avaFile" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+        </div>
+        <div class="acct-who">
+          <b id="acctName">—</b>
+          <span id="acctRole" class="hint"></span>
+          <div class="acct-acts">
+            <button type="button" class="btn btn-sm" id="avaPick2">انتخاب تصویر</button>
+            <button type="button" class="btn btn-sm btn-ghost" id="avaClear">حذف تصویر</button>
+          </div>
+          <p class="hint" style="margin:6px 0 0">
+            تصویر تا ۴ مگابایت، در قالب JPEG یا PNG. روی سرور کوچک و بازنویسی می‌شود.
+          </p>
+        </div>
+      </div>
+      <div class="msg notice hidden" id="avaMsg" role="status"></div>
+    </div>
+  </section>
+
+  <section class="card" data-sec="appearance">
+    <h2 class="card-head">
+      <svg class="ic" aria-hidden="true"><use href="#i-type"/></svg>
+      <span>نمایش</span>
+      <span class="spacer"></span>
+      <span class="hint" id="prefsState"></span>
+    </h2>
+    <div class="card-body" style="display:grid;gap:var(--s4)">
+      <div>
+        <label class="label" for="fsRange">اندازه متن</label>
+        <div class="fsrow">
+          <input type="range" id="fsRange" min="85" max="150" step="5" value="100">
+          <output class="fsval" id="fsOut">۱۰۰٪</output>
+          <button type="button" class="btn btn-sm btn-ghost" id="fsReset">اندازه پیش‌فرض</button>
+        </div>
+        <p class="hint" style="margin:6px 0 0">
+          همین صفحه بلافاصله تغییر می‌کند. این تنظیم روی حساب شما ذخیره می‌شود،
+          پس روی گوشی و رایانه‌های دیگر هم اعمال می‌شود.
+        </p>
+      </div>
+      <div class="swrow">
+        <div class="swline">
+          <label class="swtext" for="density">
+            <b>نمایش فشرده</b>
+            <span>فاصله‌ها کمتر می‌شود؛ اندازه متن تغییر نمی‌کند.</span>
+          </label>
+          <span class="sw">
+            <input type="checkbox" id="density">
+            <label for="density" aria-label="نمایش فشرده"></label>
+            <span class="sparks" aria-hidden="true">
+              <i class="spark" style="--w:2;--deg:25;--dur:11"></i>
+              <i class="spark" style="--w:1;--deg:100;--dur:18"></i>
+              <i class="spark" style="--w:1;--deg:280;--dur:5"></i>
+              <i class="spark" style="--w:2;--deg:200;--dur:3"></i>
+              <i class="spark" style="--w:2;--deg:30;--dur:20"></i>
+              <i class="spark" style="--w:2;--deg:300;--dur:9"></i>
+            </span>
+          </span>
+        </div>
+        <div class="swline">
+          <label class="swtext" for="motion">
+            <b>انیمیشن</b>
+            <span>حرکت‌ها و محوشدن‌ها. برای نمایشگر دیواری خاموش کنید.</span>
+          </label>
+          <span class="sw">
+            <input type="checkbox" id="motion" checked>
+            <label for="motion" aria-label="انیمیشن"></label>
+            <span class="sparks" aria-hidden="true">
+              <i class="spark" style="--w:2;--deg:60;--dur:13"></i>
+              <i class="spark" style="--w:1;--deg:150;--dur:7"></i>
+              <i class="spark" style="--w:2;--deg:240;--dur:16"></i>
+              <i class="spark" style="--w:1;--deg:330;--dur:4"></i>
+            </span>
+          </span>
+        </div>
+      </div>
+      <div class="msg notice hidden" id="prefsMsg" role="status"></div>
+    </div>
+  </section>
+
+  <section class="card" data-sec="security">
+    <h2 class="card-head">
+      <svg class="ic" aria-hidden="true"><use href="#i-key-round"/></svg>
+      <span>تغییر رمز</span>
+    </h2>
+    <div class="card-body">
+      <div class="grid">
+        <div><label class="label" for="pwCur">رمز فعلی</label>
+          <input class="input" id="pwCur" type="password" autocomplete="current-password" dir="ltr"></div>
+        <div><label class="label" for="pwNew">رمز جدید</label>
+          <input class="input" id="pwNew" type="password" autocomplete="new-password" dir="ltr"
+                 placeholder="حداقل ۱۰ نویسه"></div>
+        <div><label class="label" for="pwNew2">تکرار رمز جدید</label>
+          <input class="input" id="pwNew2" type="password" autocomplete="new-password" dir="ltr"></div>
+        <div><button class="btn btn-primary" id="pwBtn">تغییر رمز</button></div>
+      </div>
+      <p class="hint" style="margin:10px 0 0">
+        با تغییر رمز، همه دستگاه‌های دیگر از حساب خارج می‌شوند. این دستگاه وارد می‌ماند.
+      </p>
+      <div class="msg notice hidden" id="pwMsg" role="status"></div>
+    </div>
+  </section>
+
+  <!-- Two-step sign-in: drawn by twostep.js. -->
+  <section class="card" data-sec="security" id="twoStep"></section>
+
+  <!-- Passkeys: drawn by passkeys.js, and hidden where they are off. -->
+  <section class="card" data-sec="security" id="passkeyCard" hidden></section>
+
+  <section class="card" data-sec="security">
+    <h2 class="card-head">
+      <svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg>
+      <span>نشست‌های فعال</span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sm" id="soBtn">خروج از دستگاه‌های دیگر</button>
+    </h2>
+    <div class="card-body">
+      <div id="sessList" class="sesslist"><div class="skel"><i></i><i style="width:70%"></i></div></div>
+      <p class="hint" style="margin:10px 0 0">
+        نشستی که ۱۲ ساعت درخواستی نفرستد از این فهرست حذف می‌شود.
+      </p>
+      <div class="msg notice hidden" id="soMsg" role="status"></div>
+    </div>
+  </section>
+</template>
+
+<template id="tpl">
+  <section class="card" data-sec="users">
+    <h2 class="card-head">افزودن کاربر</h2>
+    <div class="card-body">
+      <div class="grid">
+        <div><label class="label" for="nu">نام کاربری</label>
+          <input class="input" id="nu" autocapitalize="none" autocorrect="off" spellcheck="false"
+                 dir="ltr" placeholder="ali.rezaei"></div>
+        <div><label class="label" for="nd">نام نمایشی</label>
+          <input class="input" id="nd" placeholder="علی رضایی"></div>
+        <div><label class="label" for="nph">شمارهٔ همراه</label>
+          <input class="input" id="nph" type="tel" dir="ltr" placeholder="09121234567"></div>
+        <div><label class="label" for="np">گذرواژه</label>
+          <input class="input" id="np" type="password" autocomplete="new-password"
+                 dir="ltr" placeholder="حداقل ۱۰ نویسه"></div>
+        <div><label class="label" for="nr">نقش</label>
+          <select class="select" id="nr">
+            <option value="viewer">بیننده</option>
+            <option value="manager">مدیر</option>
+            <option value="admin">مدیر ارشد: همه‌چیز، از جمله تنظیمات و کاربران</option>
+          </select></div>
+        <div><button class="btn btn-primary" id="addBtn">افزودن</button></div>
+      </div>
+    </div>
+    <div class="msg notice hidden" id="addMsg" role="status"></div>
+  </section>
+
+  <section class="card" data-sec="users">
+    <h2 class="card-head">کاربران</h2>
+    <div class="users-bar">
+      <input class="input" id="userQ" type="search" placeholder="جستجو با نام یا نام کاربری" autocomplete="off">
+      <span class="hint" id="userCount" style="margin:0"></span>
+    </div>
+    <div class="table-scroll"><table class="data">
+      <thead><tr>
+        <th>کاربر</th><th>نقش</th><th>وضعیت</th><th>فعالیت</th>
+        <th>تاریخ ساخت</th><th>آخرین ورود</th><th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <div class="users-pager" id="userPager">
+      <button type="button" class="btn btn-sm" id="userPrev">قبلی</button>
+      <span class="hint" id="userPage" style="margin:0"></span>
+      <button type="button" class="btn btn-sm" id="userNext">بعدی</button>
+    </div>
+    <div class="msg notice hidden" id="listMsg" role="status"></div>
+  </section>
+
+  <!-- What each role gets by default (roles.js, roletemplates.go). -->
+  <section class="card" data-sec="users" id="rolesCard">
+    <h2 class="card-head">نقش‌ها: دسترسی‌های پیش‌فرض</h2>
+    <div class="card-body">
+      <p class="hint" style="margin-top:0">هر کاربر دسترسی‌های نقشش را دارد مگر آنچه برای خودش جداگانه مجاز یا ممنوع شده باشد. مدیر ارشد همیشه همه‌چیز را دارد.</p>
+      <div style="display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap">
+        <select class="select" id="roleSel" style="width:auto">
+          <option value="manager">مدیر</option>
+          <option value="viewer">بیننده</option>
+        </select>
+        <button type="button" class="btn btn-primary btn-sm" id="roleSave">ذخیره</button>
+        <button type="button" class="btn btn-sm" id="roleReset">بازگشت به پیش‌فرض</button>
+      </div>
+      <div style="display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap;margin-top:var(--s2)">
+        <input class="input" id="roleNew" placeholder="نام نقش" style="width:auto;min-width:160px">
+        <button type="button" class="btn btn-sm" id="roleAdd">نقش تازه</button>
+        <button type="button" class="btn btn-sm" id="roleRename" hidden>تغییر نام</button>
+        <button type="button" class="btn btn-sm" id="roleDel" hidden>حذف نقش</button>
+      </div>
+      <p class="hint" id="roleState"></p>
+      <div id="roleBody" class="perm-body" style="max-height:none"></div>
+      <div class="msg notice hidden" id="roleMsg" role="status"></div>
+    </div>
+  </section>
+
+  <!-- The permission matrix.
+       A dialog rather than a row that expands, because there are nearly forty
+       grantable things grouped into eight headings: inline, it would push the
+       rest of the table off the screen and lose the person you were editing.
+
+       EVERY CONTROL IS A THREE-WAY CHOICE, not a checkbox. The third state is
+       "inherit from the role", and without it the first click on a permission
+       would pin it for ever -- a later change to what a manager gets would
+       silently skip anybody who had ever been edited. Each option says what
+       inheriting currently means, so the choice is not made blind. -->
+  <dialog id="permDlg" class="perm-dlg">
+    <form method="dialog" id="permForm">
+      <h2 class="card-head" style="margin-top:0">
+        دسترسی‌های <span id="permWho"></span>
+      </h2>
+      <p class="hint" id="permRole"></p>
+      <div class="perm-actions">
+        <button type="button" class="btn btn-sm" id="permReset">بازگشت همه به پیش‌فرض نقش</button>
+        <button type="button" class="btn btn-sm" id="permDenyAll">همه ممنوع</button>
+        <span class="hint" style="margin:0" id="permCount"></span>
+      </div>
+      <div id="permBody" class="perm-body"></div>
+      <div class="msg notice hidden" id="permMsg" role="status"></div>
+      <div class="perm-foot">
+        <button type="button" class="btn btn-accent" id="permSave">ذخیره</button>
+        <button type="button" class="btn" id="permClose">بستن</button>
+      </div>
+    </form>
+  </dialog>
+</template>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+let me = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    ...opts,
+  });
+  if (r.status === 401) { location.replace('/login?next=/settings'); throw new Error('unauthenticated'); }
+  return r;
+}
+
+// Three states, not two.
+//
+// This took a boolean, so every call that did not pass it read as an error:
+// "تصویر ذخیره شد" was announced in red on red, which tells somebody their
+// upload failed when it succeeded. A progress line ("در حال ارسال…") is not a
+// verdict either, so it gets the neutral style rather than being dressed as
+// one. Passing true still means success, so the existing calls are unchanged.
+function say(el, text, kind) {
+  const k = kind === true ? 'ok' : (kind || 'bad');
+  el.textContent = text;
+  el.className = 'msg notice ' + (k === 'ok' ? 'notice-ok' : k === 'info' ? '' : 'notice-bad');
+  // Only a settled, good outcome clears itself. An error stays until the next
+  // action, and a progress line is replaced by whatever follows it.
+  if (k === 'ok') setTimeout(() => el.classList.add('hidden'), 4000);
+}
+
+// Notifications on this person's own devices (push.js does the subscribing).
+//
+// The card appears only when the server can send; a card whose every button
+// fails would teach people the feature is broken. It says, for THIS device,
+// exactly why it is off when it is, because every platform fails silently in
+// its own way.
+async function wirePush() {
+  // push.js is deferred; wait for it rather than assume it arrived.
+  for (let i = 0; i < 40 && !window.DocfindPush; i++) await new Promise(r => setTimeout(r, 50));
+  const P = window.DocfindPush;
+  if (!P) return;
+  const cfg = await P.config().catch(() => ({ available: false }));
+  if (!cfg.available) return;
+
+  $('main').appendChild($('tplPush').content.cloneNode(true));
+  const msg = (text, bad) => {
+    const m = $('pushMsg');
+    m.textContent = text || '';
+    m.classList.toggle('hidden', !text);
+    m.classList.toggle('bad', !!bad);
+  };
+
+  const paint = async () => {
+    const on = P.active();
+    let why = '';
+    if (!P.supported()) why = 'این مرورگر اعلان پس‌زمینه ندارد.';
+    else if (P.needsInstall()) why = 'در آیفون اعلان فقط در برنامه نصب‌شده روی صفحه اصلی کار می‌کند (راهنما پایین همین کارت).';
+    else if (Notification.permission === 'denied') why = 'اجازه اعلان برای این سایت در تنظیمات مرورگر یا دستگاه بسته شده است.';
+    $('pushState').textContent = on ? 'روی این دستگاه روشن است' : 'روی این دستگاه خاموش است';
+    $('pushWhy').textContent = why || (on
+      ? 'پیام‌ها و تماس‌های تازه به این دستگاه فرستاده می‌شود، حتی وقتی برنامه بسته است.'
+      : 'با روشن کردن، پیام‌ها و تماس‌های تازه حتی وقتی برنامه بسته است به این دستگاه می‌رسد.');
+    $('pushOn').hidden = on || !!why;
+    $('pushOff').hidden = !on;
+    $('pushTest').hidden = !on;
+
+    let list = [];
+    try { list = await P.devices(); } catch (_) {}
+    const box = $('pushDevices');
+    if (!list.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="label">دستگاه‌های ثبت‌شده شما</div>' + list.map(d => {
+      const name = esc(d.label || d.browser || 'دستگاه') + (d.current ? ' <b>(همین دستگاه)</b>' : '');
+      const meta = [esc(d.service)];
+      if (d.last_success) meta.push('آخرین اعلان رسیده: ' + esc(ago(d.last_success)));
+      if (d.failures) meta.push('<span class="bad">' + esc(String(d.failures)) + ' تلاش ناموفق</span>');
+      return '<div style="display:flex;gap:var(--s2);align-items:center;justify-content:space-between;' +
+        'padding:var(--s2) 0;border-bottom:1px solid var(--line)">' +
+        '<div><div>' + name + '</div><div class="hint">' + meta.join(' · ') + '</div></div>' +
+        '<button type="button" class="btn btn-sm btn-ghost" data-rm="' + esc(String(d.id)) + '">حذف</button></div>';
+    }).join('');
+    box.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { await P.removeDevice(b.dataset.rm); msg('دستگاه حذف شد.'); }
+      catch (e) { msg('حذف انجام نشد.', true); }
+      await paint();
+    }));
+  };
+
+  $('pushOn').addEventListener('click', async () => {
+    $('pushOn').disabled = true;
+    msg('در حال روشن کردن…');
+    const why = await P.enable(true);
+    $('pushOn').disabled = false;
+    msg(why ? why : 'روشن شد. برای آزمایش، «ارسال اعلان آزمایشی» را بزنید و برنامه را ببندید.', !!why);
+    await paint();
+  });
+  $('pushOff').addEventListener('click', async () => {
+    await P.forgetDevice();
+    msg('اعلان روی این دستگاه خاموش شد.');
+    await paint();
+  });
+  $('pushTest').addEventListener('click', async () => {
+    try {
+      const r = await P.test();
+      msg('اعلان آزمایشی برای ' + r.queued + ' دستگاه فرستاده شد. برنامه را کامل ببندید؛ باید تا چند ثانیه برسد.');
+    } catch (e) { msg(e.message || 'فرستاده نشد.', true); }
+    setTimeout(paint, 8000);
+  });
+
+  // What reaches this person at all. Per person, not per device, so it shows
+  // whether or not THIS device is switched on; topics that can never reach
+  // them are left out.
+  let topics = [];
+  const hours = [...Array(24).keys()].map(h => '<option value="' + h + '">' +
+    new Intl.NumberFormat('fa-IR', { minimumIntegerDigits: 2 }).format(h) + ':۰۰</option>').join('');
+  $('quietFrom').innerHTML = hours;
+  $('quietTo').innerHTML = hours;
+  const paintQuiet = q => {
+    const on = q && q.from !== q.to;
+    $('quietFrom').value = on ? q.from : 22;
+    $('quietTo').value = on ? q.to : 7;
+    $('quietOff').hidden = !on;
+  };
+  const saveQuiet = async (from, to) => {
+    try {
+      const r = await api('/api/push/quiet', { method: 'POST', body: JSON.stringify({ from, to }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'ذخیره نشد.');
+      paintQuiet(d.quiet);
+      msg(from === to ? 'ساعت آرام برداشته شد.' : 'ساعت آرام ذخیره شد.');
+    } catch (e) { msg(e.message || 'ذخیره نشد.', true); }
+  };
+  $('quietSave').addEventListener('click', () => saveQuiet(+$('quietFrom').value, +$('quietTo').value));
+  $('quietOff').addEventListener('click', () => saveQuiet(0, 0));
+  const paintTopics = async () => {
+    try {
+      const r = await api('/api/push/topics');
+      if (!r.ok) return;
+      const d = await r.json();
+      topics = d.topics || [];
+      paintQuiet(d.quiet);
+    } catch (_) { return; }
+    const shown = topics.filter(t => t.available);
+    $('pushTopics').hidden = !shown.length;
+    $('pushTopicList').innerHTML = shown.map(t => {
+      const id = 'topic-' + esc(t.id);
+      return '<div class="swline"><label class="swtext" for="' + id + '"><b>' + esc(t.label) +
+        '</b><span>' + esc(t.hint) + '</span></label><span class="sw"><input type="checkbox" id="' + id +
+        '" data-topic="' + esc(t.id) + '"' + (t.on ? ' checked' : '') + '><label for="' + id +
+        '" aria-label="' + esc(t.label) + '"></label></span></div>';
+    }).join('');
+    $('pushTopicList').querySelectorAll('[data-topic]').forEach(b => b.addEventListener('change', saveTopics));
+  };
+  const saveTopics = async () => {
+    const boxes = [...$('pushTopicList').querySelectorAll('[data-topic]')];
+    const offNow = new Map(boxes.map(b => [b.dataset.topic, !b.checked]));
+    // A topic not shown keeps what is stored: the list sent is the whole list.
+    const off = topics.filter(t => offNow.has(t.id) ? offNow.get(t.id) : !t.on).map(t => t.id);
+    boxes.forEach(b => { b.disabled = true; });
+    try {
+      const r = await api('/api/push/topics', { method: 'POST', body: JSON.stringify({ off }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'ذخیره نشد.');
+      msg('انتخاب اعلان‌ها ذخیره شد.');
+    } catch (e) { msg(e.message || 'ذخیره نشد.', true); }
+    await paintTopics();
+  };
+  await paint();
+  await paintTopics();
+}
+
+function when(iso) {
+  if (!iso || iso.startsWith('0001')) return '—';
+  return new Date(iso).toLocaleDateString();
+}
+
+function userRow(u) {
+  // Everything a row could change is in the edit window (useredit.js); the
+  // row only says who, what role, and whether they are about.
+  const self = me && u.username === me.username;
+  // Online is a fact about activity, not a state on the account, so it comes
+  // from the presence map rather than from the user record: somebody is online
+  // because a request arrived from them in the last few minutes.
+  const key = String(u.username || '').toLowerCase();
+  const isOn = Object.prototype.hasOwnProperty.call(presence.online, key);
+  const seen = presence.last_seen[key];
+  const activity = isOn
+    ? '<span class="onchip on"><i></i>آنلاین</span>'
+    : (seen ? `<span class="onchip"><i></i>${esc(ago(seen))}</span>`
+            : '<span class="hint" style="margin:0">—</span>');
+  const face = u.has_avatar
+    ? `<img class="uava" alt="" src="/api/account/photo?u=${encodeURIComponent(u.username)}">`
+    : '<svg class="uava uava-ph" aria-hidden="true"><use href="#i-avatar"/></svg>';
+  return `<tr data-u="${esc(u.username)}">
+    <td><div class="ucell">${face}<div>
+        <b>${esc(u.username)}</b>${u.display_name && u.display_name !== u.username
+        ? `<div class="hint" style="margin:0">${esc(u.display_name)}</div>` : ''}
+        ${self ? '<span class="chip chip-accent">شما</span>' : ''}</div></div></td>
+    <td>${esc(roleName(u.role))}</td>
+    <td>${u.disabled ? '<span class="chip chip-bad">غیرفعال</span>'
+                     : '<span class="chip chip-ok">فعال</span>'}</td>
+    <td>${activity}</td>
+    <td>${when(u.created_at)}</td>
+    <td>${when(u.last_login)}</td>
+    <td><button class="btn btn-sm" data-edit aria-label="ویرایش ${esc(u.username)}">ویرایش</button></td>
+  </tr>`;
+}
+
+// Who is using the application. Fetched alongside the user list and kept here
+// so a row can be rendered without another request per person.
+let presence = { online: {}, last_seen: {} };
+
+async function loadUsers() {
+  // Both at once: the list is one request and presence is another, and they
+  // are independent, so waiting for them in sequence would double the time
+  // the table spends empty.
+  const [r, pr] = await Promise.all([api('/api/users'), api('/api/presence')]);
+  const d = await r.json();
+  if (!r.ok) { say($('listMsg'), d.error || 'فهرست کاربران بارگذاری نشد.'); return; }
+  if (pr.ok) {
+    const p = await pr.json().catch(() => null);
+    // Presence failing is not worth failing the table over: the column just
+    // reads as unknown.
+    if (p) presence = { online: p.online || {}, last_seen: p.last_seen || {} };
+  }
+  allUsers = d.users || [];
+  renderUsers();
+}
+
+// The list a page at a time, searched by name or user name: a whole office
+// does not fit one screen.
+const USERS_PER_PAGE = 20;
+let allUsers = [], userPage = 0;
+function renderUsers() {
+  const q = ($('userQ') ? $('userQ').value : '').trim().toLowerCase();
+  const list = q ? allUsers.filter(u => (u.username + ' ' + (u.display_name || '')).toLowerCase().includes(q)) : allUsers;
+  const pages = Math.max(1, Math.ceil(list.length / USERS_PER_PAGE));
+  userPage = Math.min(userPage, pages - 1);
+  $('rows').innerHTML = list.slice(userPage * USERS_PER_PAGE, (userPage + 1) * USERS_PER_PAGE).map(userRow).join('');
+  if ($('userCount')) $('userCount').textContent = faNum.format(list.length) + ' کاربر';
+  if ($('userPage')) $('userPage').textContent = 'صفحهٔ ' + faNum.format(userPage + 1) + ' از ' + faNum.format(pages);
+  if ($('userPrev')) $('userPrev').disabled = userPage === 0;
+  if ($('userNext')) $('userNext').disabled = userPage >= pages - 1;
+}
+
+async function send(method, body, msgEl) {
+  const r = await api('/api/users' + (body.path || ''), {
+    method,
+    body: JSON.stringify(body.payload || {}),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { say(msgEl, d.error || 'انجام نشد.'); return false; }
+  return true;
+}
+
+// ------------------------------------------------------------ my account
+//
+// Everything in this block acts on whoever is signed in. None of it takes a
+// user name: the server resolves that from the token, so there is nothing
+// here that one person could aim at another's account.
+
+const faNum = new Intl.NumberFormat('fa-IR');
+
+// A time in the words people use for it. Absolute dates are kept for anything
+// older than a day, because "۳ روز پیش" stops being useful for a support
+// question and "۱۴۰۵/۰۶/۲۲" does not.
+function ago(iso) {
+  if (!iso) return '—';
+  const t = new Date(iso);
+  if (isNaN(t)) return '—';
+  const secs = Math.round((Date.now() - t.getTime()) / 1000);
+  if (secs < 45) return 'همین حالا';
+  if (secs < 90) return 'یک دقیقه پیش';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return faNum.format(mins) + ' دقیقه پیش';
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return faNum.format(hours) + ' ساعت پیش';
+  try {
+    return new Intl.DateTimeFormat('fa-IR-u-ca-persian',
+      { dateStyle: 'short', timeStyle: 'short' }).format(t);
+  } catch (_) { return t.toLocaleString('fa-IR'); }
+}
+
+// Roles with their names: the built-in three and any made on this page
+// (roles.js publishes them), for every role menu here.
+function roleList() {
+  const made = (window.DOCFIND_ROLES || []).filter(r => r.custom).map(r => [r.id, r.name]);
+  return [['viewer', 'بیننده'], ['manager', 'مدیر']].concat(made, [['admin', 'مدیر ارشد']]);
+}
+function roleName(r) { const x = roleList().find(p => p[0] === r); return x ? x[1] : r; }
+// A made role in the add-user menu too, and the users list redrawn with it.
+window.addEventListener('docfind:roles', () => {
+  const nr = $('nr');
+  if (nr) {
+    nr.querySelectorAll('option[data-made]').forEach(o => o.remove());
+    for (const r of (window.DOCFIND_ROLES || []).filter(x => x.custom)) {
+      const o = document.createElement('option');
+      o.value = r.id; o.textContent = r.name; o.dataset.made = '1';
+      nr.insertBefore(o, nr.lastElementChild);
+    }
+  }
+  if (typeof allUsers !== 'undefined' && allUsers.length) renderUsers();
+});
+
+// The picture. A cache-busting query is appended after an upload because the
+// route answers with Cache-Control: no-cache and an ETag -- which means the
+// browser revalidates rather than refetches, and would otherwise redraw the
+// old image from its cache for the rest of the session.
+function showAvatar(has, who) {
+  const img = $('myAva'), ph = $('myAvaPh');
+  if (!img || !ph) return;
+  // setAttribute, not the .hidden property.
+  //
+  // .hidden is reflected on HTMLElement and NOT on SVGElement, so "ph.hidden =
+  // true" on an <svg> sets a plain JavaScript property, never the attribute,
+  // and the [hidden] rule has nothing to match. The placeholder therefore
+  // stayed on screen under the uploaded picture: two circles, the lower one
+  // sitting over the message below it, which is what "the message goes behind
+  // the avatar" was. The attribute form works on both kinds of element.
+  const show = (el, on) => {
+    if (on) el.removeAttribute('hidden');
+    else el.setAttribute('hidden', '');
+  };
+  if (has) {
+    // Cache-busted: the route answers with an ETag and no-cache, so the
+    // browser revalidates rather than refetching and would otherwise redraw
+    // the previous picture.
+    img.src = '/api/account/photo?u=' + encodeURIComponent(who) + '&v=' + Date.now();
+  }
+  show(img, has);
+  show(ph, !has);
+}
+
+async function uploadAvatar(file) {
+  if (!file) return;
+  // Checked here as well as on the server so somebody who picked a 20 MB
+  // photograph is told immediately rather than after the upload.
+  if (file.size > 4 * 1024 * 1024) {
+    say($('avaMsg'), 'حجم تصویر بیش از ۴ مگابایت است.');
+    return;
+  }
+  say($('avaMsg'), 'در حال ارسال…', 'info');
+  // The bytes are the body. No multipart wrapper: there is one file and no
+  // other field, so a form encoding would add a parser on the server for
+  // nothing.
+  const r = await api('/api/account/photo', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { say($('avaMsg'), d.error || 'ارسال تصویر انجام نشد.'); return; }
+  say($('avaMsg'), 'تصویر ذخیره شد.', true);
+  showAvatar(true, me.username);
+}
+
+async function clearAvatar() {
+  const r = await api('/api/account/photo', { method: 'DELETE' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { say($('avaMsg'), d.error || 'حذف تصویر انجام نشد.'); return; }
+  say($('avaMsg'), 'تصویر حذف شد.', true);
+  showAvatar(false, me.username);
+}
+
+// Preferences are applied as the control moves and saved a moment later, so
+// dragging the slider does not post once per step.
+let prefsTimer = null;
+function currentPrefs() {
+  return {
+    font_scale: Number($('fsRange').value) || 100,
+    density: $('density').checked ? 'compact' : 'comfortable',
+    // The switch is labelled "animation", so it is on when motion is wanted;
+    // the stored field is the opposite of that.
+    reduce_motion: !$('motion').checked,
+  };
+}
+function paintPrefs(p) {
+  $('fsRange').value = String(p.font_scale || 100);
+  $('fsOut').textContent = faNum.format(p.font_scale || 100) + '٪';
+  $('density').checked = p.density === 'compact';
+  $('motion').checked = !p.reduce_motion;
+}
+function onPrefChange() {
+  const p = currentPrefs();
+  $('fsOut').textContent = faNum.format(p.font_scale) + '٪';
+  // Applied immediately: a size control that only takes effect after a save
+  // makes somebody guess, and guessing about legibility is the one thing this
+  // setting exists to stop.
+  if (window.docfindPrefs) window.docfindPrefs.write(p);
+  $('prefsState').textContent = 'در حال ذخیره…';
+  clearTimeout(prefsTimer);
+  prefsTimer = setTimeout(async () => {
+    const r = await api('/api/account/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(p),
+    });
+    if (!r.ok) { $('prefsState').textContent = 'ذخیره نشد'; return; }
+    const d = await r.json().catch(() => ({}));
+    if (d.prefs && window.docfindPrefs) window.docfindPrefs.write(d.prefs);
+    $('prefsState').textContent = 'ذخیره شد';
+    setTimeout(() => { if ($('prefsState')) $('prefsState').textContent = ''; }, 2200);
+  }, 450);
+}
+
+const DEV_ICON = { phone: 'smartphone', tablet: 'tablet', desktop: 'monitor' };
+
+async function loadSessions() {
+  const box = $('sessList');
+  if (!box) return;
+  const r = await api('/api/account/sessions');
+  if (!r.ok) { box.innerHTML = '<div class="note">فهرست نشست‌ها خوانده نشد.</div>'; return; }
+  const d = await r.json().catch(() => ({}));
+  const list = d.sessions || [];
+  if (!list.length) { box.innerHTML = '<div class="note">نشست فعالی ثبت نشده است.</div>'; return; }
+  box.innerHTML = list.map(x => `
+    <div class="sess${x.current ? ' here' : ''}">
+      <svg class="sess-ic" aria-hidden="true"><use href="#i-${DEV_ICON[x.kind] || 'monitor'}"/></svg>
+      <div class="sess-txt">
+        <b>${esc(x.device || 'دستگاه نامشخص')}${x.current ? ' <span class="chip chip-accent">این دستگاه</span>' : ''}</b>
+        <span class="sess-meta" dir="ltr">${esc(x.ip || '—')}</span>
+        <span class="sess-meta">آخرین فعالیت: ${esc(ago(x.last_seen))} · شروع: ${esc(ago(x.started))}</span>
+      </div>
+    </div>`).join('');
+}
+
+function wireAccount() {
+  $('acctName').textContent = me.display_name || me.username;
+  $('acctRole').textContent = roleName(me.role) + ' · ' + me.username;
+  showAvatar(!!me.has_avatar, me.username);
+  paintPrefs((me.prefs && me.prefs.font_scale) ? me.prefs : { font_scale: 100, density: 'comfortable' });
+
+  const pick = () => $('avaFile').click();
+  $('avaPick').addEventListener('click', pick);
+  $('avaPick2').addEventListener('click', pick);
+  $('avaFile').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    // Reset the input so choosing the same file twice still fires a change.
+    e.target.value = '';
+    uploadAvatar(f);
+  });
+  $('avaClear').addEventListener('click', clearAvatar);
+
+  $('fsRange').addEventListener('input', onPrefChange);
+  $('density').addEventListener('change', onPrefChange);
+  $('motion').addEventListener('change', onPrefChange);
+  $('fsReset').addEventListener('click', () => {
+    // Only the size resets; the two switches keep whatever they were set to.
+    const keep = currentPrefs();
+    paintPrefs({ font_scale: 100, density: keep.density, reduce_motion: keep.reduce_motion });
+    onPrefChange();
+  });
+
+  $('pwBtn').addEventListener('click', async () => {
+    const cur = $('pwCur').value, a = $('pwNew').value, b = $('pwNew2').value;
+    if (a.length < 10) { say($('pwMsg'), 'رمز جدید باید دست‌کم ۱۰ نویسه باشد.'); return; }
+    if (a !== b) { say($('pwMsg'), 'تکرار رمز جدید یکسان نیست.'); return; }
+    if (a === cur) { say($('pwMsg'), 'رمز جدید با رمز فعلی یکی است.'); return; }
+    const r = await api('/api/account/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current: cur, next: a }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { say($('pwMsg'), d.error || 'تغییر رمز انجام نشد.'); return; }
+    $('pwCur').value = $('pwNew').value = $('pwNew2').value = '';
+    say($('pwMsg'), d.note || 'رمز عوض شد.', true);
+    loadSessions();
+  });
+
+  $('soBtn').addEventListener('click', async () => {
+    const r = await api('/api/account/signout-others', { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { say($('soMsg'), d.error || 'انجام نشد.'); return; }
+    say($('soMsg'), d.note || 'دستگاه‌های دیگر خارج شدند.', true);
+    loadSessions();
+  });
+
+  loadSessions();
+  if (window.DocfindTwoStep) window.DocfindTwoStep.mount($('twoStep'), api, say);
+  if (window.DocfindPasskeys) window.DocfindPasskeys.mount($('passkeyCard'), api, say);
+}
+
+// ------------------------------------------------------------ the categories
+//
+// One page per category, at /settings/<id>, grouped as settings are
+// everywhere: what is one's own, then what runs the system (administrators).
+// Each card carries data-sec naming its category; a page builds only the
+// templates its category needs.
+const SETTINGS = [
+  { id: 'account',       name: 'حساب من',            icon: 'avatar',     group: 'شخصی',
+    lede: 'نام، تصویر و اطلاعات حساب شما.' },
+  { id: 'appearance',    name: 'نمایش',              icon: 'type',       group: 'شخصی',
+    lede: 'اندازهٔ متن، فشردگی و حرکت‌ها، روی همین حساب.' },
+  { id: 'security',      name: 'امنیت و ورود',       icon: 'key-round',  group: 'شخصی',
+    lede: 'رمز، ورود دومرحله‌ای، کلیدهای عبور و نشست‌های فعال.' },
+  { id: 'notifications', name: 'اعلان‌ها',            icon: 'bell',       group: 'شخصی',
+    lede: 'اعلان روی گوشی و رایانه، و اینکه دربارهٔ چه چیزهایی.' },
+  { id: 'users',         name: 'کاربران و دسترسی‌ها', icon: 'users',      group: 'مدیریت سامانه', admin: true,
+    lede: 'افزودن کاربر، نقش‌ها و دسترسی‌های هر حساب.' },
+];
+
+// Old links named a card by its id; each goes to its category's page now.
+const LEGACY_ANCHORS = { notifications: 'notifications', twoStep: 'security', passkeyCard: 'security' };
+
+function held(m, perm) { return !!m && (m.permissions || []).includes(perm); }
+
+// settingsFor is the categories this account may open, in their order.
+function settingsFor(m) {
+  return SETTINGS.filter(s => (!s.admin || (m && m.role === 'admin')) && (!s.when || (m && s.when(m))));
+}
+
+// currentSetting reads the category from the address, and puts a bare
+// /settings, an old #anchor or a category not open to this account on the
+// first one it may open.
+function currentSetting(list) {
+  const part = location.pathname.replace(/\/+$/, '').split('/')[2] || '';
+  const fromHash = LEGACY_ANCHORS[location.hash.replace('#', '')] || '';
+  let id = part || fromHash;
+  if (!list.some(s => s.id === id)) id = list.length ? list[0].id : 'account';
+  const want = '/settings/' + id;
+  if (location.pathname !== want || location.hash) history.replaceState(null, '', want);
+  return SETTINGS.find(s => s.id === id) || SETTINGS[0];
+}
+
+function drawSettingsNav(list, cur) {
+  const nav = $('setNav');
+  nav.textContent = '';
+  let group = '';
+  for (const s of list) {
+    if (s.group !== group) {
+      group = s.group;
+      const h = document.createElement('h2');
+      h.textContent = group;
+      nav.appendChild(h);
+    }
+    const a = document.createElement('a');
+    a.href = '/settings/' + s.id;
+    if (s.id === cur.id) a.setAttribute('aria-current', 'page');
+    // Built as elements, the icon named by SETTINGS (every name in it is in
+    // the sprite; iconrefs_test reads literal references only).
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'ic');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS(NS, 'use');
+    use.setAttribute('href', '#' + 'i-' + s.icon);
+    svg.appendChild(use);
+    a.appendChild(svg);
+    const t = document.createElement('span');
+    t.textContent = s.name;
+    a.appendChild(t);
+    nav.appendChild(a);
+  }
+}
+
+// settingHead is the page's own heading, above its cards.
+function settingHead(s) {
+  const d = document.createElement('div');
+  const h = document.createElement('h2');
+  h.className = 'set-title';
+  h.textContent = s.name;
+  const p = document.createElement('p');
+  p.className = 'set-lede';
+  p.textContent = s.lede || '';
+  d.appendChild(h);
+  d.appendChild(p);
+  return d;
+}
+
+// onlySetting keeps this category's cards and hides the rest of a shared
+// template; a category with nothing to show on this server says so.
+function onlySetting(s) {
+  const cards = $('main').querySelectorAll('[data-sec]');
+  let shown = 0;
+  cards.forEach(c => {
+    const mine = c.dataset.sec === s.id;
+    c.classList.toggle('off-sec', !mine);
+    if (mine) shown++;
+  });
+  if (!shown) {
+    const empty = document.createElement('section');
+    empty.className = 'card';
+    empty.innerHTML = '<div class="card-body"><p class="hint" style="margin:0"></p></div>';
+    empty.querySelector('p').textContent = s.id === 'notifications'
+      ? 'اعلان روی این سرور یا در این مرورگر در دسترس نیست.'
+      : 'این بخش روی این سرور تنظیم نشده است.';
+    $('main').appendChild(empty);
+  }
+}
+
+async function init() {
+  try {
+    const meta = await (await api('/api/me')).json();
+    if (meta.auth_enabled && !meta.user) { location.replace('/login?next=' + encodeURIComponent(location.pathname)); return; }
+    me = meta.user;
+    // The account carries the display preferences; the copy applied before
+    // paint came from this browser's cache, so reconcile them here.
+    if (window.docfindPrefs) window.docfindPrefs.write((me && me.prefs) || null);
+    $('who').textContent = me ? (me.display_name || me.username) : '';
+    buildNav({
+      admin: !!me && me.role === 'admin',
+      user: me ? (me.display_name || me.username) : null,
+      account: me,
+      onSignOut: () => fetch('/api/logout', { method: 'POST', credentials: 'same-origin' })
+        .finally(() => location.replace('/login')),
+    });
+  } catch (e) { return; }
+
+  // One category per page (see SETTINGS). The personal ones are for
+  // everybody: this page used to be nothing but user administration, so a
+  // viewer who opened it was told they had no business here -- while the
+  // things that are their own business, their picture, their type size and
+  // their password, had nowhere to live.
+  const list = settingsFor(me);
+  const cur = currentSetting(list);
+  document.title = cur.name + ' | تنظیمات';
+  drawSettingsNav(list, cur);
+  $('main').innerHTML = '';
+  $('main').appendChild(settingHead(cur));
+  if (!me) return;
+  if (cur.id === 'account' || cur.id === 'appearance' || cur.id === 'security') {
+    // One template holds the three: account, display, and the four
+    // security cards. The others are hidden by onlySetting.
+    $('main').appendChild($('tplAccount').content.cloneNode(true));
+    wireAccount();
+  } else if (cur.id === 'notifications') {
+    // Only where the server can send.
+    await wirePush();
+  } else if (me.role === 'admin' && cur.id === 'users') {
+    $('main').appendChild($('tpl').content.cloneNode(true));
+  }
+  onlySetting(cur);
+  if (cur.id !== 'users' || me.role !== 'admin') {
+    return;
+  }
+
+  // Users and permissions: the list, and everything wired to it below.
+  wirePerms();
+  $('userQ').addEventListener('input', () => { userPage = 0; renderUsers(); });
+  $('userPrev').addEventListener('click', () => { userPage--; renderUsers(); });
+  $('userNext').addEventListener('click', () => { userPage++; renderUsers(); });
+  if (window.DocfindRoles) window.DocfindRoles.mount($('rolesCard'));
+  await loadUsers();
+
+  $('addBtn').addEventListener('click', async () => {
+    const payload = {
+      username: $('nu').value.trim(),
+      display_name: $('nd').value.trim() || $('nu').value.trim(),
+      password: $('np').value,
+      role: $('nr').value,
+    };
+    if ($('nph').value.trim()) payload.phone = $('nph').value.trim();
+    if (payload.password.length < 10) {
+      say($('addMsg'), 'گذرواژه باید دست‌کم ۱۰ نویسه باشد.');
+      return;
+    }
+    $('addBtn').disabled = true;
+    if (await send('POST', { payload }, $('addMsg'))) {
+      say($('addMsg'), `${payload.username} افزوده شد.`, true);
+      $('nu').value = $('nd').value = $('np').value = $('nph').value = '';
+      await loadUsers();
+    }
+    $('addBtn').disabled = false;
+  });
+
+  $('rows').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-edit]');
+    if (btn && window.DocfindUserEdit) window.DocfindUserEdit.open(btn.closest('tr').dataset.u);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The permission matrix.
+//
+// THE SERVER IS THE BOUNDARY AND THIS IS NOT. Every route checks for itself;
+// this screen only lets an administrator say what somebody may do. Nothing here
+// enforces anything, and the API refuses an unknown permission rather than
+// trusting the page to have sent a real one.
+
+// The catalogue is fetched once per page: it is the same for every account.
+let permCat = null;
+
+const PERM_STATE_FA = { allow: 'مجاز', deny: 'ممنوع' };
+
+async function loadPermCatalogue() {
+  if (permCat) return permCat;
+  const r = await api('/api/permissions');
+  if (!r.ok) throw new Error('فهرست دسترسی‌ها خوانده نشد.');
+  permCat = await r.json();
+  return permCat;
+}
+
+// permRowsHTML draws one group.
+//
+// Each select's INHERIT option spells out what inheriting currently means for
+// this person's role, because "inherit" on its own tells an administrator
+// nothing about the access it produces.
+function permGroupHTML(group, grants, template) {
+  const rows = group.items.map(it => {
+    const set = grants[it.id] || '';
+    const byRole = template.has(it.id);
+    const inheritLabel = byRole ? 'پیش‌فرض نقش: مجاز' : 'پیش‌فرض نقش: ممنوع';
+    if (it.admin_only) {
+      // Cannot be granted by an override at all, so offering a control would
+      // be offering something the server will refuse.
+      return `<div class="perm-row" data-set="">
+        <label>${esc(it.label)}
+          <span class="lock">(فقط مدیر ارشد)</span></label>
+        <span class="chip">${byRole ? 'مجاز' : 'ممنوع'}</span>
+      </div>`;
+    }
+    const opt = (v, text) =>
+      `<option value="${v}" ${set === v ? 'selected' : ''}>${text}</option>`;
+    return `<div class="perm-row" data-set="${esc(set)}">
+      <label for="p-${esc(it.id)}">${esc(it.label)}</label>
+      <select class="select" id="p-${esc(it.id)}" data-perm="${esc(it.id)}"
+              aria-label="${esc(it.label)}">
+        ${opt('', inheritLabel)}
+        ${opt('allow', PERM_STATE_FA.allow)}
+        ${opt('deny', PERM_STATE_FA.deny)}
+      </select>
+    </div>`;
+  }).join('');
+  return `<div class="perm-group"><h3>${esc(group.name)}</h3>${rows}</div>`;
+}
+
+function permOverrideCount() {
+  return $('permBody').querySelectorAll('select[data-perm]').length
+    ? Array.from($('permBody').querySelectorAll('select[data-perm]'))
+        .filter(s => s.value !== '').length
+    : 0;
+}
+
+function permRefreshCount() {
+  const n = permOverrideCount();
+  $('permCount').textContent = n === 0
+    ? 'همه دسترسی‌ها از نقش ارث‌بری می‌شوند.'
+    : `${n} دسترسی دستی تنظیم شده است.`;
+}
+
+let permUser = '';
+
+async function openPerms(username) {
+  permUser = username;
+  const dlg = $('permDlg');
+  $('permWho').textContent = username;
+  $('permBody').innerHTML = '<p class="hint">در حال خواندن…</p>';
+  $('permMsg').classList.add('hidden');
+  if (!dlg.open) dlg.showModal();
+
+  try {
+    const [cat, r] = await Promise.all([
+      loadPermCatalogue(),
+      api('/api/permissions/user?u=' + encodeURIComponent(username)),
+    ]);
+    if (!r.ok) throw new Error('دسترسی‌های این کاربر خوانده نشد.');
+    const mine = await r.json();
+    const grants = mine.grants || {};
+    const template = new Set(cat.templates[mine.role] || []);
+    $('permRole').textContent =
+      `نقش: ${roleName(mine.role)}. گزینهٔ «پیش‌فرض نقش» همان چیزی است که این نقش به‌طور معمول دارد.`;
+    $('permBody').innerHTML = cat.groups
+      .map(g => permGroupHTML(g, grants, template)).join('');
+    permRefreshCount();
+  } catch (err) {
+    $('permBody').innerHTML = '';
+    say($('permMsg'), err.message || 'خواندن دسترسی‌ها ناموفق بود.');
+  }
+}
+
+// wirePerms attaches the dialog's handlers.
+//
+// CALLED AFTER THE TEMPLATE IS MOUNTED, not at parse time: the users card and
+// this dialog live inside <template id="tpl">, so none of these elements exist
+// until an administrator's page clones it. Attaching at the top level threw on
+// null for everybody, administrators included -- the script died before the
+// rest of the page was wired.
+function wirePerms() {
+// A changed control recolours its row at once, so an override is visible
+// before anybody saves.
+$('permBody').addEventListener('change', e => {
+  const sel = e.target.closest('select[data-perm]');
+  if (!sel) return;
+  sel.closest('.perm-row').dataset.set = sel.value;
+  permRefreshCount();
+});
+
+$('permReset').addEventListener('click', () => {
+  $('permBody').querySelectorAll('select[data-perm]').forEach(s => {
+    s.value = '';
+    s.closest('.perm-row').dataset.set = '';
+  });
+  permRefreshCount();
+  say($('permMsg'), 'همه به پیش‌فرض نقش برگشت. برای اعمال، ذخیره کنید.', true);
+});
+
+// "Only this": everything denied, then the one or two things the person is
+// for set back to allowed. Without it, giving somebody a single page meant
+// changing some fifty controls one at a time.
+$('permDenyAll').addEventListener('click', () => {
+  $('permBody').querySelectorAll('select[data-perm]').forEach(s => {
+    s.value = 'deny';
+    s.closest('.perm-row').dataset.set = 'deny';
+  });
+  permRefreshCount();
+  say($('permMsg'), 'همه ممنوع شد. آنچه باید بماند را «مجاز» کنید و ذخیره کنید.', true);
+});
+
+$('permClose').addEventListener('click', () => $('permDlg').close());
+
+$('permSave').addEventListener('click', async () => {
+  // The WHOLE set is sent, not the changes. "Remove this override" has no
+  // representation in a list of changes, and that is the state most worth
+  // being able to reach.
+  const grants = {};
+  $('permBody').querySelectorAll('select[data-perm]').forEach(s => {
+    if (s.value) grants[s.dataset.perm] = s.value;
+  });
+  $('permSave').disabled = true;
+  try {
+    const r = await api('/api/permissions/user', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: permUser, grants }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { say($('permMsg'), d.error || 'ذخیره نشد.'); return; }
+    const n = Object.keys(grants).length;
+    say($('permMsg'), n === 0
+      ? `دسترسی‌های ${permUser} به پیش‌فرض نقش برگشت.`
+      : `${n} دسترسی برای ${permUser} ذخیره شد.`, true);
+  } finally {
+    $('permSave').disabled = false;
+  }
+});
+}
+
+$('signout').addEventListener('click', () => {
+  fetch('/api/logout', { method: 'POST', credentials: 'same-origin' })
+    .finally(() => location.replace('/login'));
+});
+
+// The worker is registered by nav.js, which every page in the app loads.
+init();
+</script>
+</body>
+</html>

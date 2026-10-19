@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#142F40">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="پیام‌رسان">
+<title>ورود | پیام‌رسان</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+  body {
+    min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+    padding: var(--s6);
+    padding-top: max(var(--s6), env(safe-area-inset-top));
+    padding-bottom: max(var(--s6), env(safe-area-inset-bottom));
+  }
+  .signin { width: 100%; max-width: 390px; padding: 28px; }
+
+  /* The sunk field from uiverse.io/Praashoo7/brave-moose-56 (MIT): an inset
+     shadow makes the input look pressed into the card rather than drawn on
+     top of it, with the icon inside the same well as the text.
+     Two changes from the original. It keeps its visible label above -- the
+     original relies on a placeholder alone, which disappears the moment
+     somebody types and leaves a filled form with unlabelled boxes. And the
+     hover that scaled the whole card by 1.05 is gone: a sign-in form that
+     grows when the pointer crosses it makes the field you were aiming at
+     move. */
+  .signin .sunk {
+    display: flex; align-items: center; gap: var(--s2);
+    padding: 11px var(--s3);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    box-shadow: inset 2px 4px 9px rgb(0 0 0 / .55);
+    transition: box-shadow var(--normal) var(--ease);
+  }
+  .signin .sunk:focus-within {
+    box-shadow: inset 2px 4px 9px rgb(0 0 0 / .55),
+                0 0 0 2px var(--accent);
+  }
+  .signin .sunk .ic { width: 17px; height: 17px; flex: none; color: var(--fg-faint); }
+  .signin .sunk:focus-within .ic { color: var(--accent); }
+  /* The input carries no chrome of its own -- the well around it is the
+     control -- so it has no background, border or ring. */
+  .signin .bare {
+    flex: 1; min-width: 0;
+    background: none; border: 0; outline: none;
+    color: var(--fg); font: inherit; font-size: var(--text-base);
+  }
+  .signin .bare::placeholder { color: var(--fg-faint); }
+  .signin-go {
+    width: 100%; margin-top: var(--s5);
+    border-radius: var(--radius-full);
+    font-size: var(--text-md); font-weight: 700;
+  }
+  .signin .mark { display: flex; align-items: center; gap: 11px; margin-bottom: var(--s5); }
+  .signin h1 { font-size: 19px; }
+  .signin .sub { margin-top: 3px; color: var(--fg-muted); font-size: var(--text-base); }
+</style>
+</head>
+
+<body>
+<form class="card signin glass rise" id="form" autocomplete="on">
+  <div class="mark">
+    <img src="/icon.png" alt="" width="40" height="40">
+    <div>
+      <h1>پیام‌رسان</h1>
+      <div class="sub" id="sub">برای گفت‌وگو و تماس با همکاران وارد شوید.</div>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label" for="username">نام کاربری</label>
+    <div class="sunk">
+      <svg class="ic" aria-hidden="true"><use href="#i-user"/></svg>
+      <input class="bare" id="username" name="username" autocomplete="username"
+             autocapitalize="none" autocorrect="off" spellcheck="false" dir="ltr"
+             placeholder="نام کاربری" required>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label" for="password">گذرواژه</label>
+    <div class="sunk">
+      <svg class="ic" aria-hidden="true"><use href="#i-key-round"/></svg>
+      <input class="bare" id="password" name="password" type="password"
+             autocomplete="current-password" dir="ltr" placeholder="گذرواژه" required>
+    </div>
+  </div>
+
+  <!-- The second step, for an account that has it on: shown once the
+       password is accepted, in place of the two fields above. -->
+  <div class="field hidden" id="codeField">
+    <label class="label" for="code" id="codeLabel">کد شش‌رقمی Google Authenticator</label>
+    <div class="sunk">
+      <svg class="ic" aria-hidden="true"><use href="#i-key-round"/></svg>
+      <input class="bare" id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+             autocapitalize="none" spellcheck="false" dir="ltr" maxlength="12"
+             placeholder="۶ رقم">
+    </div>
+    <div class="sub" style="margin-top:var(--s2)" id="codeHint">کد شش‌رقمی Google Authenticator (یا هر برنامهٔ مشابه) را وارد کنید. اگر گوشی در دسترس نیست، یکی از کدهای پشتیبان را بنویسید.</div>
+    <button type="button" class="btn btn-sm hidden" id="resend" style="margin-top:var(--s2)">ارسال دوبارهٔ کد</button>
+  </div>
+
+  <!-- A forgotten password, second half: the texted code. The new password
+       goes in the fields of the step below. -->
+  <div class="field hidden" id="resetCodeField">
+    <label class="label" for="resetCode">کد شش‌رقمی پیامک‌شده</label>
+    <div class="sunk">
+      <svg class="ic" aria-hidden="true"><use href="#i-key-round"/></svg>
+      <input class="bare" id="resetCode" inputmode="numeric" autocomplete="one-time-code"
+             autocapitalize="none" spellcheck="false" dir="ltr" maxlength="12" placeholder="۶ رقم">
+    </div>
+    <button type="button" class="btn btn-sm" id="resetResend" style="margin-top:var(--s2)">فرستادن دوبارهٔ کد</button>
+  </div>
+
+  <!-- The new-password step, for an account made with a temporary password
+       (update_required): shown once it is signed in, in place of
+       everything above, and nothing else answers until it is
+       done. The current password is asked for only when this page does not
+       already have it -- that is, when somebody arrives here signed in. -->
+  <div class="hidden" id="changeStep">
+    <div class="field hidden" id="curField">
+      <label class="label" for="curPassword">گذرواژهٔ فعلی (موقت)</label>
+      <div class="sunk">
+        <svg class="ic" aria-hidden="true"><use href="#i-key-round"/></svg>
+        <input class="bare" id="curPassword" type="password" autocomplete="current-password" dir="ltr">
+      </div>
+    </div>
+    <div class="field">
+      <label class="label" for="newPassword">گذرواژهٔ تازه</label>
+      <div class="sunk">
+        <svg class="ic" aria-hidden="true"><use href="#i-key-round"/></svg>
+        <input class="bare" id="newPassword" type="password" autocomplete="new-password" dir="ltr"
+               minlength="10" placeholder="دست‌کم ۱۰ نویسه">
+      </div>
+    </div>
+    <div class="field">
+      <label class="label" for="newPassword2">تکرار گذرواژهٔ تازه</label>
+      <div class="sunk">
+        <svg class="ic" aria-hidden="true"><use href="#i-key-round"/></svg>
+        <input class="bare" id="newPassword2" type="password" autocomplete="new-password" dir="ltr" minlength="10">
+      </div>
+    </div>
+  </div>
+  <button type="submit" id="go" class="btn btn-primary signin-go">ورود</button>
+  <!-- Shown only where the server has passkeys on and this browser can use
+       them: the device's own lock instead of a password and a code. -->
+  <button type="button" id="passkey" class="btn signin-go hidden" style="margin-top:var(--s3)">ورود با کلید عبور</button>
+  <!-- Shown only where the server can text a code (password_reset on /api/me). -->
+  <p class="hidden" id="forgotRow" style="margin:var(--s4) 0 0;text-align:center">
+    <button type="button" class="linkish" id="forgot">گذرواژه را فراموش کرده‌اید؟</button>
+  </p>
+  <p class="hidden" id="backRow" style="margin:var(--s4) 0 0;text-align:center">
+    <button type="button" class="linkish" id="backToSignIn">بازگشت به ورود</button>
+  </p>
+  <div class="notice notice-bad hidden" id="msg" role="alert" style="margin-top:var(--s4)"></div>
+  <div class="hint hidden" id="firstRun" style="margin-top:var(--s5);text-align:center">
+    هنوز هیچ حسابی ساخته نشده است. نخستین مدیر ارشد را روی سرور بسازید:<br>
+    <code dir="ltr">docfind-messenger -users users.json -add-user yourname -role admin</code>
+  </div>
+</form>
+
+<!-- Two-step sign-in, when the security policy requires it and this account
+     has neither a second step nor a passkey: the settings page's own card
+     (twostep.js), here because nothing else answers until it is done. -->
+<div class="signin hidden" id="twoStepWrap" style="max-width:560px;width:100%">
+  <p class="sub" style="margin:0 0 var(--s3);text-align:center">ورود دومرحله‌ای برای همهٔ حساب‌ها اجباری شده است. پیش از ادامه آن را روشن کنید.</p>
+  <section class="card glass" id="twoStepCard"></section>
+  <button type="button" class="btn btn-primary signin-go" id="twoStepGo">ادامه</button>
+  <div class="notice notice-bad hidden" id="twoStepMsg" role="alert" style="margin-top:var(--s4)"></div>
+</div>
+<script src="/passkeys.js"></script>
+<script src="/twostep.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+
+function fail(text, good) {
+  const m = $('msg');
+  m.textContent = text;
+  m.className = 'notice ' + (good ? 'notice-ok' : 'notice-bad');
+}
+
+// safeNext decides where to go after signing in.
+//
+// Resolved against this origin and checked, rather than tested with a string
+// prefix. "starts with /" is not enough: "//evil.com" passes it and browsers
+// read that as protocol-relative, so it navigates off-site. That turns the
+// sign-in page into a working phishing step -- the victim really does sign in
+// to the real site, then lands somewhere else -- which matters precisely
+// because this is reachable from the internet. Anything not on this origin,
+// and anything that will not parse, falls back to the home page.
+function safeNext(raw) {
+  if (!raw) return '/';
+  try {
+    const u = new URL(raw, location.origin);
+    if (u.origin !== location.origin) return '/';
+    return u.pathname + u.search + u.hash;
+  } catch (e) {
+    return '/';
+  }
+}
+
+// Ask the server what state it is in before showing a password box that
+// cannot possibly work: on a fresh install there is no account to sign in as,
+// and the useful thing to show is how to create one.
+async function init() {
+  try {
+    const r = await fetch('/api/me', { credentials: 'same-origin' });
+    const me = await r.json();
+    if (!me.auth_enabled) {
+      // Accounts are off entirely; this page has nothing to do.
+      location.replace('/');
+      return;
+    }
+    if (me.needs_first_admin) {
+      $('firstRun').classList.remove('hidden');
+      $('go').disabled = true;
+      $('sub').textContent = 'هنوز هیچ حسابی روی این نصب ساخته نشده است.';
+      return;
+    }
+    if (me.user && me.user.update_required) { changeStep(null); return; }
+    if (me.user && me.user.two_step_required) { twoStepStep(); return; }
+    if (me.user) { location.replace('/'); return; }
+    if (me.passkeys && window.DocfindPasskeys && window.DocfindPasskeys.supported()) {
+      passkeyOffered = true;
+      $('passkey').classList.remove('hidden');
+    }
+    resetOffered = !!me.password_reset;
+    $('forgotRow').classList.toggle('hidden', !resetOffered);
+  } catch (e) {
+    // A failed probe should not block a sign-in attempt.
+  }
+}
+let passkeyOffered = false;
+let resetOffered = false;
+
+// A forgotten password (passwordreset.go): stage 1 asks for a code by
+// username, stage 2 sends the code with the new password; 0 is signing in.
+let resetting = 0;
+function resetStep(stage) {
+  resetting = stage;
+  $('msg').classList.add('hidden');
+  const on = stage > 0;
+  $('password').closest('.field').classList.toggle('hidden', on);
+  $('password').required = !on;
+  $('username').closest('.field').classList.toggle('hidden', stage === 2);
+  $('resetCodeField').classList.toggle('hidden', stage !== 2);
+  $('resetCode').required = stage === 2;
+  $('changeStep').classList.toggle('hidden', stage !== 2);
+  $('curField').classList.add('hidden');
+  $('curPassword').required = false;
+  $('newPassword').required = $('newPassword2').required = stage === 2;
+  $('passkey').classList.toggle('hidden', on || !passkeyOffered);
+  $('forgotRow').classList.toggle('hidden', on || !resetOffered);
+  $('backRow').classList.toggle('hidden', !on);
+  $('sub').textContent = stage === 1
+    ? 'نام کاربری‌تان را بنویسید؛ کدی به شمارهٔ همراه ثبت‌شده در حسابتان پیامک می‌شود.'
+    : stage === 2 ? 'کد پیامک‌شده و گذرواژهٔ تازه را وارد کنید.'
+    : 'برای گفت‌وگو و تماس با همکاران وارد شوید.';
+  $('go').textContent = stage === 1 ? 'فرستادن کد' : stage === 2 ? 'ثبت گذرواژهٔ تازه' : 'ورود';
+  (stage === 2 ? $('resetCode') : stage === 1 ? $('username') : $('password')).focus();
+}
+const postJSON = (path, body) => fetch(path, {
+  method: 'POST', credentials: 'same-origin',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+async function askResetCode() {
+  const r = await postJSON('/api/login/forgot', { username: $('username').value.trim() });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) { fail(body.error || 'کد فرستاده نشد.'); return false; }
+  fail(body.note, true);
+  return true;
+}
+async function submitReset() {
+  if (resetting === 1) {
+    if (await askResetCode()) {
+      resetStep(2);
+      // resetStep hid the note; the person should still read where the code went.
+      $('msg').classList.remove('hidden');
+    }
+    return;
+  }
+  const password = $('newPassword').value;
+  if (password.length < 10) { fail('گذرواژهٔ تازه باید دست‌کم ۱۰ نویسه باشد.'); return; }
+  if (password !== $('newPassword2').value) { fail('دو گذرواژهٔ تازه یکی نیستند.'); return; }
+  const r = await postJSON('/api/login/reset',
+    { username: $('username').value.trim(), code: $('resetCode').value, password });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) { fail(body.error || 'گذرواژه عوض نشد.'); return; }
+  for (const id of ['resetCode', 'newPassword', 'newPassword2', 'password']) $(id).value = '';
+  resetStep(0);
+  fail(body.note, true);
+}
+$('forgot').addEventListener('click', () => resetStep(1));
+$('backToSignIn').addEventListener('click', () => resetStep(0));
+$('resetResend').addEventListener('click', async () => {
+  $('resetResend').disabled = true;
+  try { await askResetCode(); }
+  catch (_) { fail('ارتباط با سرور برقرار نشد.'); }
+  finally { $('resetResend').disabled = false; }
+});
+
+// The second step's challenge: held in this page only, never stored. It
+// proves the password was right and is good for five minutes and one sign-in.
+let challenge = null;
+let channel = 'ایمیل'; // how a sent code arrives: 'ایمیل' or 'پیامک'
+
+// info is the password step's answer: which way the code comes (the app, or
+// an email and where it went).
+function stepTwo(on, info) {
+  challenge = on || null;
+  for (const id of ['username', 'password']) $(id).closest('.field').classList.toggle('hidden', !!on);
+  $('codeField').classList.toggle('hidden', !on);
+  $('code').required = !!on;
+  $('code').value = '';
+  $('sub').textContent = on ? 'مرحلهٔ دوم ورود' : 'برای گفت‌وگو و تماس با همکاران وارد شوید.';
+  // A code that is SENT -- by email, or by SMS to the account's phone --
+  // rather than read off an app.
+  const bySMS = !!(info && info.method === 'sms');
+  const sent = bySMS || !!(info && info.method === 'email');
+  channel = bySMS ? 'پیامک' : 'ایمیل';
+  $('resend').classList.toggle('hidden', !sent);
+  if (sent) {
+    $('codeLabel').textContent = 'کد شش‌رقمی ارسال‌شده با ' + channel;
+    $('codeHint').textContent = info.mail_failed
+      ? 'کد با ' + channel + ' فرستاده نشد. «ارسال دوبارهٔ کد» را بزنید یا یک کد پشتیبان وارد کنید.'
+      : 'کدی که به ' + (info.sent_to || (bySMS ? 'شمارهٔ شما' : 'ایمیل شما')) + ' فرستاده شد را وارد کنید (تا ۱۰ دقیقه معتبر است). ' +
+        'اگر به ' + (bySMS ? 'گوشی' : 'ایمیل') + ' دسترسی ندارید، یکی از کدهای پشتیبان را بنویسید.';
+  }
+  if (on) $('code').focus();
+}
+
+$('passkey').addEventListener('click', async () => {
+  $('msg').classList.add('hidden');
+  $('passkey').disabled = true;
+  try {
+    await window.DocfindPasskeys.signIn();
+    goOn();
+  } catch (e) {
+    fail(e.message || 'ورود با کلید عبور انجام نشد.');
+  } finally {
+    $('passkey').disabled = false;
+  }
+});
+
+$('resend').addEventListener('click', async () => {
+  $('msg').classList.add('hidden');
+  try {
+    const r = await fetch('/api/login/second-step/resend', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challenge }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (body.restart) { stepTwo(null); $('password').value = ''; }
+      fail(body.error || 'ارسال انجام نشد.');
+      return;
+    }
+    $('codeHint').textContent = 'کد تازه با ' + channel + ' به ' + (body.sent_to || 'شما') + ' فرستاده شد.';
+  } catch (_) {
+    fail('ارتباط با سرور برقرار نشد.');
+  }
+});
+
+// The new-password step. current is the temporary password just typed, or
+// null when this page opened on a session that still has to change it.
+let changing = false;
+let currentPw = null;
+function changeStep(current) {
+  changing = true;
+  currentPw = current;
+  stepTwo(null);
+  for (const id of ['username', 'password']) $(id).closest('.field').classList.add('hidden');
+  $('username').required = $('password').required = false;
+  $('changeStep').classList.remove('hidden');
+  $('curField').classList.toggle('hidden', current !== null);
+  $('curPassword').required = current === null;
+  $('newPassword').required = $('newPassword2').required = true;
+  $('passkey').classList.add('hidden');
+  $('sub').textContent = 'گذرواژهٔ شما موقت است؛ پیش از ادامه، گذرواژهٔ تازه‌ای برای خودتان انتخاب کنید.';
+  $('go').textContent = 'ثبت گذرواژهٔ تازه';
+  (current === null ? $('curPassword') : $('newPassword')).focus();
+}
+async function submitChange() {
+  const next = $('newPassword').value;
+  const current = currentPw !== null ? currentPw : $('curPassword').value;
+  if (next.length < 10) { fail('گذرواژهٔ تازه باید دست‌کم ۱۰ نویسه باشد.'); return; }
+  if (next !== $('newPassword2').value) { fail('دو گذرواژهٔ تازه یکی نیستند.'); return; }
+  if (next === current) { fail('گذرواژهٔ تازه باید با گذرواژهٔ موقت فرق داشته باشد.'); return; }
+  const r = await fetch('/api/account/password', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current, next }),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (r.ok) { currentPw = null; afterDuties(); return; }
+  if (r.status === 401) {
+    // The session went (it expired, or was signed out elsewhere): start over.
+    location.reload();
+    return;
+  }
+  if (r.status === 403 && currentPw !== null) {
+    // The password this page held is no longer right; ask for it.
+    currentPw = null;
+    $('curField').classList.remove('hidden');
+    $('curPassword').required = true;
+  }
+  fail(body.error || 'گذرواژه عوض نشد.');
+}
+// The second duty, after a new password: two steps, when the policy says.
+function twoStepStep() {
+  $('form').classList.add('hidden');
+  $('twoStepWrap').classList.remove('hidden');
+  const api = (path, opts = {}) => fetch(path, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    ...opts,
+  });
+  const say = (el, text, kind) => {
+    if (!el) return;
+    const k = kind === true ? 'ok' : (kind || 'bad');
+    el.textContent = text;
+    el.className = 'msg notice ' + (k === 'ok' ? 'notice-ok' : k === 'info' ? '' : 'notice-bad');
+  };
+  if (window.DocfindTwoStep) window.DocfindTwoStep.mount($('twoStepCard'), api, say);
+}
+// afterDuties goes on once nothing is owed any more, or to the next duty.
+async function afterDuties() {
+  try {
+    const me = await (await fetch('/api/me', { credentials: 'same-origin' })).json();
+    if (me.user && me.user.update_required) { changeStep(null); return; }
+    if (me.user && me.user.two_step_required) { twoStepStep(); return; }
+  } catch (_) { /* the next page asks again */ }
+  goOn();
+}
+$('twoStepGo').addEventListener('click', async () => {
+  try {
+    const me = await (await fetch('/api/me', { credentials: 'same-origin' })).json();
+    if (me.user && me.user.two_step_required) {
+      const m = $('twoStepMsg');
+      m.textContent = 'هنوز ورود دومرحله‌ای روشن نشده است.';
+      m.classList.remove('hidden');
+      return;
+    }
+  } catch (_) {}
+  goOn();
+});
+function goOn() {
+  location.replace(safeNext(new URLSearchParams(location.search).get('next')));
+}
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('msg').classList.add('hidden');
+  if (changing) {
+    $('go').disabled = true;
+    try { await submitChange(); }
+    catch (_) { fail('ارتباط با سرور برقرار نشد.'); }
+    finally { $('go').disabled = false; }
+    return;
+  }
+  if (resetting) {
+    $('go').disabled = true;
+    try { await submitReset(); }
+    catch (_) { fail('ارتباط با سرور برقرار نشد.'); }
+    finally { $('go').disabled = false; }
+    return;
+  }
+  $('go').disabled = true;
+  $('go').textContent = challenge ? 'در حال بررسی…' : 'در حال ورود…';
+  try {
+    const r = challenge
+      ? await fetch('/api/login/second-step', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ challenge, code: $('code').value }),
+        })
+      : await fetch('/api/login', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: $('username').value, password: $('password').value }),
+        });
+    const body = await r.json().catch(() => ({}));
+    if (r.ok && body.second_step) {
+      stepTwo(body.challenge, body);
+      return;
+    }
+    if (r.ok && body.user && !body.user.update_required && body.user.two_step_required) {
+      twoStepStep();
+      return;
+    }
+    if (r.ok && body.user && body.user.update_required) {
+      // Signed in on a temporary password: the new one comes first. Held in
+      // memory for the change request only -- after a second step the
+      // password field still has it.
+      changeStep($('password').value || null);
+      return;
+    }
+    if (r.ok) {
+      // The token is already set as an HttpOnly cookie; nothing to store here.
+      if (body.recovery_used) {
+        // Said before leaving: a code was spent, and the person should know
+        // how many they have left before they need one again.
+        fail('یک کد پشتیبان مصرف شد؛ ' + (body.recovery_left || 0) +
+             ' کد باقی مانده است. از صفحهٔ تنظیمات کدهای تازه بگیرید.');
+        setTimeout(goOn, 5000);
+        return;
+      }
+      goOn();
+      return;
+    }
+    if (body.restart) {
+      stepTwo(null);
+      $('password').value = '';
+    }
+    if (r.status === 429) {
+      fail(body.error || 'تلاش بیش از حد. چند دقیقه صبر کنید و دوباره امتحان کنید.');
+    } else {
+      fail(body.error || (challenge ? 'کد درست نیست.' : 'نام کاربری یا گذرواژه نادرست است.'));
+    }
+  } catch (err) {
+    fail('ارتباط با سرور برقرار نشد.');
+  } finally {
+    $('go').disabled = false;
+    if (!changing) $('go').textContent = challenge ? 'تأیید' : 'ورود';
+  }
+});
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+/* chatgroup.css: groups, channels and topics in the messenger (chatgroup*.js).
+   The same tokens as messages.html; dark only, RTL. Panels and screens move
+   with transform/opacity only. */
+
+/* ---- the side panel: a stack of screens beside the chat (all of it on a phone) */
+.g-back { position: fixed; inset: 0; z-index: 50; background: rgb(4 12 20 / .38); }
+.g-panel { position: absolute; inset-block: 0; inset-inline-end: 0; width: min(400px, 100%); background: var(--surface); box-shadow: var(--shadow-lg); overflow: hidden; }
+.g-screen { position: absolute; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--surface); }
+.g-head { display: flex; align-items: center; gap: 6px; padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px; border-bottom: 1px solid var(--line); }
+.g-title { margin: 0; font-size: 1.05rem; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 0 calc(24px + env(safe-area-inset-bottom, 0px)); }
+.g-info, .g-form, .g-pick { display: grid; gap: 14px; padding: 14px 14px 0; }
+.g-form .g-go, .g-pick .g-go { justify-self: stretch; margin-top: 4px; }
+
+/* ---- the chat's head in the panel */
+.g-top { display: grid; justify-items: center; gap: 6px; padding: 10px 0 4px; text-align: center; }
+.g-top .m-av { width: 84px; height: 84px; font-size: 32px; }
+.g-top .m-av .dot { display: none; }
+.g-name { margin: 6px 0 0; font-size: 1.2rem; font-weight: 700; text-wrap: balance; }
+.g-sub { color: var(--fg-muted); font-size: .9rem; }
+.g-about { margin: 4px 0 0; color: var(--fg); line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 60ch; }
+.g-ltr { direction: ltr; text-align: left; font-family: ui-monospace, Consolas, monospace; font-size: .85rem; background: var(--surface-2); padding: 8px 10px; border-radius: 10px; }
+
+/* ---- lists of rows */
+.g-list { display: grid; }
+.g-list + .g-list, .g-block + .g-block { border-top: 1px solid var(--line); padding-top: 6px; }
+.g-sec { font-size: .8rem; font-weight: 700; color: var(--accent-lift, var(--accent)); letter-spacing: .02em; padding: 8px 4px 6px; }
+.g-row { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 9px 6px; border-radius: 12px; min-height: 48px; transition: background var(--dur-fast) var(--ease-out); }
+.g-row:hover { background: var(--surface-2); }
+.g-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.g-row .m-av { flex: none; }
+.g-row .m-av .dot { display: none; }
+.g-row.on { background: var(--accent-soft); }
+.g-row.on::after { content: ''; width: 20px; height: 20px; border-radius: 50%; background: var(--accent) center / 12px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230E2230' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E"); flex: none; }
+.g-row.off { opacity: .55; }
+.g-row.danger, .g-row.danger .g-ic { color: var(--bad-ink); }
+.g-ic { width: 40px; height: 40px; flex: none; display: grid; place-items: center; color: var(--fg-muted); }
+.g-ic svg { width: 22px; height: 22px; }
+.g-row-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.g-row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-row-sub { font-size: .8rem; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-row .m-badge { flex: none; }
+.g-note { margin: 4px 4px; color: var(--fg-muted); font-size: .9rem; line-height: 1.7; }
+.g-members .input { margin-block: 4px 6px; }
+
+/* ---- forms */
+.g-field { display: grid; gap: 6px; font-size: .9rem; color: var(--fg-muted); }
+.g-field > span { padding-inline: 2px; }
+.g-switch { display: flex; align-items: center; gap: 12px; padding: 8px 4px; cursor: pointer; }
+.g-switch input { appearance: none; -webkit-appearance: none; flex: none; width: 42px; height: 24px; border-radius: 12px; background: var(--surface-3); position: relative; cursor: pointer; margin: 0; transition: background var(--dur-fast) var(--ease-out); }
+.g-switch input::after { content: ''; position: absolute; top: 3px; inset-inline-start: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--dur-base) var(--ease-spring); }
+.g-switch input:checked { background: var(--accent); }
+.g-switch input:checked::after { transform: translateX(-18px); } /* RTL: on is to the left */
+.g-switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.g-switch.off { opacity: .5; cursor: not-allowed; }
+.g-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.g-seg-btn { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: var(--fg-muted); }
+.g-seg-btn small { color: var(--fg-muted); font-size: .78rem; }
+.g-seg-btn[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
+.g-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.g-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.g-chips:empty { display: none; }
+.g-chip { all: unset; cursor: pointer; padding: 4px 10px 4px 26px; border-radius: 14px; background: var(--accent-soft); color: var(--fg); font-size: .85rem; position: relative; }
+.g-chip::after { content: '×'; position: absolute; inset-inline-end: 9px; top: 50%; transform: translateY(-52%); color: var(--fg-muted); }
+.g-chip:focus-visible { outline: 2px solid var(--accent); }
+.g-emoji { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; }
+.g-emo { all: unset; cursor: pointer; height: 40px; display: grid; place-items: center; font-size: 22px; border-radius: 10px; opacity: .35; filter: grayscale(.8); transition: opacity var(--dur-fast), filter var(--dur-fast), background var(--dur-fast); }
+.g-emo.on { opacity: 1; filter: none; background: var(--surface-2); }
+.g-emo:focus-visible { outline: 2px solid var(--accent); }
+.g-req { display: flex; align-items: center; gap: 10px; padding: 8px 4px; }
+.g-req .m-av .dot { display: none; }
+.g-req .btn { padding-inline: 12px; }
+.g-log-row { padding: 8px 4px; border-bottom: 1px solid var(--line); }
+.g-log-row .g-row-label { white-space: normal; }
+
+/* ---- statistics */
+.g-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.g-kpi { display: grid; gap: 2px; padding: 10px; border-radius: 12px; background: var(--surface-2); text-align: center; }
+.g-kpi b { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.g-kpi span { font-size: .8rem; color: var(--fg-muted); }
+.g-chart { width: 100%; height: auto; display: block; }
+.g-chart rect { fill: var(--accent); transform-box: fill-box; transform-origin: bottom; }
+.g-chart rect:hover { fill: var(--accent-hover, var(--accent)); }
+.g-chart text { fill: var(--fg-muted); font-size: 10px; }
+
+/* questions keep their line breaks (a chat's description under its name) */
+.m-modal .m-modal-text { white-space: pre-line; }
+
+/* ---- the new-chat sheet's first rows */
+.g-new-av { background: var(--accent-soft); color: var(--accent); }
+.g-new-av svg { width: 24px; height: 24px; }
+
+/* ---- the chat list and header */
+.m-row-kind { display: inline-grid; vertical-align: -2px; margin-inline-end: 4px; color: var(--fg-muted); }
+.m-row-kind svg { width: 15px; height: 15px; }
+.m-title-btn { cursor: pointer; border-radius: 8px; }
+.m-title-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- inside a group: names, pictures, service lines, channel views */
+.m-service { align-self: center; max-width: 86%; margin: 6px 0; padding: 4px 12px; border-radius: 12px; background: rgb(0 0 0 / .32); color: var(--fg); font-size: 12.5px; text-align: center; line-height: 1.6; }
+/* Physical sides on purpose: a bubble's direction follows its text (dir=auto),
+   but others' bubbles always sit on the right of this RTL page. */
+.m-bubble.g-them { margin-right: 40px; }
+.m-from { all: unset; cursor: pointer; display: block; font-weight: 700; font-size: 13px; margin-bottom: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-from:focus-visible { outline: 2px solid var(--accent); border-radius: 4px; }
+.m-bubble .m-gav { position: absolute; bottom: 0; right: -40px; width: 32px; height: 32px; font-size: 13px; cursor: pointer; }
+.m-bubble .m-gav .dot { display: none; }
+.m-views, .m-sign { display: inline-flex; align-items: center; gap: 3px; }
+.m-views svg { width: 13px; height: 13px; }
+.m-sign { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-gate { padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); text-align: center; color: var(--fg-muted); background: var(--surface); border-top: 1px solid var(--line); font-size: .92rem; }
+
+/* ---- a forum's topics, in place of the messages */
+.g-topics { display: grid; align-content: start; padding: 8px; gap: 2px; }
+.g-topic { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 14px; transition: background var(--dur-fast) var(--ease-out); }
+.g-topic:hover { background: var(--surface-2); }
+.g-topic:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.g-topic-ic { width: 42px; height: 42px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 19px; font-weight: 700; color: #fff; }
+.g-topic-ic svg { width: 22px; height: 22px; }
+.g-topic-new .g-topic-ic { background: var(--accent-soft); color: var(--accent); }
+
+@media (max-width: 900px) {
+  .g-panel { width: 100%; }
+  .g-back { background: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-switch input::after, .g-emo, .g-row, .g-topic { transition: none; }
+}

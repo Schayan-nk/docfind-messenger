@@ -1,0 +1,165 @@
+<!--
+  The page the service worker serves when a navigation cannot reach the server.
+
+  It exists because the fallback used to be the home page: somebody offline who
+  asked for the report builder silently got the calendar, and then watched its
+  panels fail one at a time as their requests died. A page that says what has
+  happened is a smaller thing than a page pretending to be somewhere else.
+
+  Everything here is self-contained except app.css, which the service worker
+  precaches alongside this file -- so if this page is being shown at all, the
+  stylesheet is already in the same cache. No icons from the sprite, nothing
+  fetched at load: a page about having no network cannot depend on one.
+
+  The one script is at the foot, and it depends on no network either -- it
+  watches for the network coming BACK. See the comment there.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#142F40">
+<title>اتصال نیست | پیام‌رسان</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/app.css">
+<style>
+  .off {
+    min-height: 100dvh;
+    display: grid; place-items: center;
+    padding: var(--s5);
+    padding-top: max(var(--s5), env(safe-area-inset-top));
+    padding-bottom: max(var(--s5), env(safe-area-inset-bottom));
+  }
+  .off-card {
+    width: 100%; max-width: 420px; text-align: center;
+    display: grid; gap: var(--s4); justify-items: center;
+  }
+  /* Drawn here rather than pulled from the icon sprite: the sprite is injected
+     into each page by the server, and this page is served from a cache by the
+     service worker with no server in the loop. */
+  .off-mark {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--surface-2); border: 1px solid var(--line);
+    color: var(--fg-muted);
+  }
+  .off-mark svg { width: 30px; height: 30px; }
+  .off h1 { margin: 0; font-size: 1.25rem; }
+  .off p { margin: 0; color: var(--fg-muted); line-height: 1.8; }
+  .off-note {
+    font-size: var(--text-sm); color: var(--fg-faint);
+    border-top: 1px solid var(--line); padding-top: var(--s3); width: 100%;
+  }
+</style>
+
+<div class="off">
+  <div class="off-card">
+    <div class="off-mark" aria-hidden="true">
+      <!-- A cloud with a stroke through it. Inline, for the reason above. -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.5 17.5H6.5a3.5 3.5 0 0 1-.3-6.99A5.5 5.5 0 0 1 16 8.3"/>
+        <path d="M3 3l18 18"/>
+      </svg>
+    </div>
+
+    <h1>اتصال به سرور برقرار نشد</h1>
+
+    <p>
+      این صفحه از حافظهٔ دستگاه شما باز شده است، نه از سرور. برای دیدن
+      پیام‌های تازه باید به سرور وصل باشید.
+    </p>
+
+    <button type="button" class="btn btn-primary" id="retry">تلاش دوباره</button>
+
+    <p class="off-note" id="note">
+      اگر با تلفن همراه هستید، اینترنت یا وی‌پی‌ان را بررسی کنید.
+      به‌محض وصل شدن، این صفحه خودش برمی‌گردد.
+    </p>
+  </div>
+</div>
+
+<script>
+// Coming back on its own.
+//
+// The page used to end by asking the reader to reload it once they were
+// connected again. That is a fair instruction and a poor experience: somebody
+// who loses signal in a lift, or whose laptop wakes on a different network,
+// is left looking at a page that has been wrong for several minutes and has
+// no way of knowing it.
+//
+// Why this PROBES rather than simply reloading on the 'online' event
+// -----------------------------------------------------------------
+// 'online' fires when the device gets a network interface, not when it can
+// reach this server -- and this application is behind the office network or a
+// VPN, which the paragraph above literally tells the reader to go and check.
+// So the naive version reloads the instant the phone finds any wifi, fails to
+// reach the server, and is served this same page again: a flicker, repeated
+// every time the reader moves, which looks like the app fighting itself.
+//
+// One real request to the server settles it, and it has to be one the
+// service worker will not answer for the server: the worker falls back to its
+// cache on a failed fetch, matching by path and ignoring the query (sw.js), so
+// a cached favicon would answer 200 with the network still gone. Nothing
+// under /api/ is ever served from that cache, so /api/me -- public, and
+// answered even to nobody -- fails as itself when the server is unreachable,
+// and any answer at all means it is back.
+(function () {
+  'use strict';
+
+  const note = document.getElementById('note');
+  const btn = document.getElementById('retry');
+  let trying = false;
+
+  // Normally this page is the service worker's ANSWER to a navigation that
+  // failed, so the address bar still holds the page the reader asked for --
+  // /builder, say -- and going back means re-requesting that.
+  //
+  // /offline is also a real route, and somebody on it deliberately is a
+  // different case: there the address IS this page, the server answering means
+  // the probe succeeds, and "go back to where you were" would fetch this page
+  // again. On a timer that is a reload every twenty seconds, for ever. So the
+  // automatic routes are off there; the button still works, because pressing
+  // it is a decision rather than a loop.
+  const isFallback = location.pathname !== '/offline';
+
+  async function reachable() {
+    try {
+      const res = await fetch('/api/me', { cache: 'no-store', credentials: 'same-origin' });
+      return !!res;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function tryBack(manual) {
+    if (trying) return;
+    trying = true;
+    if (manual) { btn.disabled = true; btn.textContent = 'در حال بررسی…'; }
+    const ok = await reachable();
+    if (ok) {
+      // Straight back to wherever they were trying to go. replace() rather
+      // than reload() so this page does not sit in the history behind them,
+      // waiting to be reached by the back button after it is no longer true.
+      location.replace(location.href);
+      return;
+    }
+    trying = false;
+    if (manual) {
+      btn.disabled = false;
+      btn.textContent = 'تلاش دوباره';
+      note.textContent = 'هنوز وصل نشده است. اینترنت یا وی‌پی‌ان را بررسی کنید.';
+    }
+  }
+
+  btn.addEventListener('click', () => tryBack(true));
+  if (!isFallback) return;
+
+  window.addEventListener('online', () => tryBack(false));
+  // A device that never lost its interface -- the server was simply down, or
+  // the VPN dropped while the wifi stayed up -- fires no 'online' event at
+  // all, so nothing above would ever run. This is the floor under that case,
+  // and it is slow on purpose: it is a page nobody is reading closely, and a
+  // tight retry loop on a phone is somebody's battery.
+  setInterval(() => { if (!trying) tryBack(false); }, 20000);
+})();
+</script>

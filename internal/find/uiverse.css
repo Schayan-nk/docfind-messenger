@@ -1,0 +1,574 @@
+/*
+  Components adapted from uiverse.io (MIT).
+  =========================================
+
+  Seven designs by seven different authors. Pasted in as they came, they would
+  make this application look like a component gallery: one is grey, one uses
+  pure RGB primaries, one is violet, and each brings its own radii, spacing and
+  shadow language. So each is taken for its IDEA and rebuilt on this app's own
+  tokens -- the orange accent, the warm --ap ramp, the surface steps and the
+  radius scale -- which is what makes them read as one product.
+
+  Two constraints shaped every one of them, and they are worth stating once
+  here rather than seven times below.
+
+  Persian cannot be animated letter by letter. Three of these components split
+  a word into one <span> per character and stagger an animation across them.
+  Arabic script is cursive: its letters change shape according to their
+  neighbours and join up, so splitting a Persian word into per-character
+  elements renders it as a row of disconnected isolated forms -- it stops being
+  a word. Where the original staggers letters, the same sense of motion is
+  produced by sweeping a gradient across the whole phrase instead, which leaves
+  the text a single run for the shaping engine.
+
+  And every animation here is silenced for anybody who has asked for less
+  motion, through the media query and through this application's own switch.
+  A loading indicator that cannot be turned off is the worst kind: it is on
+  screen precisely when somebody is already waiting.
+
+  Sources:
+    document search  uiverse.io/pradip_1434/hot-eel-7
+    general loader   uiverse.io/Praashoo7/lucky-hound-44
+    AI generating    uiverse.io/dexter-st/wicked-elephant-4
+    sign-in form     uiverse.io/Praashoo7/brave-moose-56
+    hamburger        uiverse.io/vinodjangid07/soft-octopus-29
+    switch           uiverse.io/MuhammadHasann/nasty-moth-15
+    search field     uiverse.io/Lakshay-art/curvy-earwig-22
+*/
+
+/* ===================================================== 1. search loader
+   A spinning bead beside "در حال جستجو". The original animates nine Latin
+   letters in sequence; here the phrase stays one text run and a highlight
+   travels across it, which is the same effect and keeps the word joined. */
+.searching {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-size: var(--text-base); font-weight: 650;
+  color: var(--fg-muted); user-select: none;
+}
+.searching .bead {
+  width: 18px; height: 18px; flex: none;
+  border-radius: 50%; background: transparent;
+  animation: searching-bead 1.5s linear infinite;
+}
+/* The original's inset shadows in pink and blue become the accent and the
+   ramp's cool anchor, so the bead belongs to this palette. */
+@keyframes searching-bead {
+  0% {
+    transform: rotate(90deg);
+    box-shadow: 0 1px 1px 0 #fff inset,
+                0 3px 5px 0 var(--accent) inset,
+                0 4px 4px 0 var(--ap8) inset;
+  }
+  50% {
+    transform: rotate(270deg);
+    box-shadow: 0 1px 1px 0 #fff inset,
+                0 3px 5px 0 var(--ap1) inset,
+                0 4px 4px 0 var(--accent) inset;
+  }
+  100% {
+    transform: rotate(450deg);
+    box-shadow: 0 1px 1px 0 #fff inset,
+                0 3px 5px 0 var(--accent) inset,
+                0 4px 4px 0 var(--ap8) inset;
+  }
+}
+/* background-clip:text needs a painted background, so the colour comes from
+   the gradient and the text itself is transparent. The fallback colour is set
+   first for anything that cannot clip to text. */
+.searching .word {
+  color: var(--fg-muted);
+  background-image: linear-gradient(
+    90deg,
+    var(--fg-faint) 0%, var(--fg-faint) 35%,
+    #fff 50%,
+    var(--fg-faint) 65%, var(--fg-faint) 100%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: searching-sweep 2.2s linear infinite;
+}
+@supports not ((background-clip: text) or (-webkit-background-clip: text)) {
+  .searching .word { -webkit-text-fill-color: currentColor; color: var(--fg-muted); }
+}
+/* Right to left, because the text is. */
+@keyframes searching-sweep {
+  0%   { background-position: -100% 0; }
+  100% { background-position: 100% 0; }
+}
+
+/* ==================================================== 2. general loader
+   Ten tracks in a fan with a bead running down each, staggered. The original
+   is entirely grey on white; here the beads take the warm --ap ramp so the
+   thing has the same colour identity as the charts, and the tracks are the
+   surface steps rather than #e0e0e0.
+
+   Sized in em from a single font-size on the root element, so one number
+   changes the whole thing: it appears inline in a card at one size and over
+   the page at another. */
+.orbit {
+  position: relative; font-size: 4.2px;
+  width: 13em; height: 13em; flex: none;
+  display: grid; place-items: center;
+}
+/* Both wrappers fill the component and stack on top of each other, so an arm
+   lies exactly over its track. */
+.orbit .tracks,
+.orbit .arms {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+}
+.orbit .track,
+.orbit .arm {
+  display: block;
+  position: absolute; width: 1.15em; height: 13em;
+  border-radius: 50px;
+}
+.orbit .track {
+  background: var(--surface-3);
+  box-shadow: inset 2px 2px 6px rgb(0 0 0 / .35);
+}
+.orbit .arm { background: transparent; }
+.orbit .bead {
+  /* display:block, because an <i> is inline and an inline box ignores width
+     and height. Without it the bead measured 0x0: the animation was running
+     correctly on an element with nothing to show. */
+  display: block;
+  width: 1.15em; height: 1.15em; border-radius: 50%;
+  background: var(--ap4);
+  box-shadow: 0 0 .6em rgb(0 0 0 / .5),
+              inset 0 -.3em .3em rgb(0 0 0 / .25);
+  animation: orbit-run 3.63s ease-in-out infinite;
+}
+/* Each arm is rotated so the ten tracks fan out from the centre, and each
+   bead starts later than the last -- which is what makes the ring look like
+   it is turning rather than pulsing. The ramp is walked across them, lightest
+   trailing, so the motion has a direction. */
+.orbit .arm:nth-child(1),  .orbit .track:nth-child(1)  { transform: rotate(0deg); }
+.orbit .arm:nth-child(2),  .orbit .track:nth-child(2)  { transform: rotate(18deg); }
+.orbit .arm:nth-child(3),  .orbit .track:nth-child(3)  { transform: rotate(36deg); }
+.orbit .arm:nth-child(4),  .orbit .track:nth-child(4)  { transform: rotate(54deg); }
+.orbit .arm:nth-child(5),  .orbit .track:nth-child(5)  { transform: rotate(72deg); }
+.orbit .arm:nth-child(6),  .orbit .track:nth-child(6)  { transform: rotate(90deg); }
+.orbit .arm:nth-child(7),  .orbit .track:nth-child(7)  { transform: rotate(108deg); }
+.orbit .arm:nth-child(8),  .orbit .track:nth-child(8)  { transform: rotate(126deg); }
+.orbit .arm:nth-child(9),  .orbit .track:nth-child(9)  { transform: rotate(144deg); }
+.orbit .arm:nth-child(10), .orbit .track:nth-child(10) { transform: rotate(162deg); }
+
+.orbit .arm:nth-child(1)  .bead { animation-delay: 0s;    background: var(--ap1); }
+.orbit .arm:nth-child(2)  .bead { animation-delay: .2s;   background: var(--ap2); }
+.orbit .arm:nth-child(3)  .bead { animation-delay: .4s;   background: var(--accent); }
+.orbit .arm:nth-child(4)  .bead { animation-delay: .6s;   background: var(--ap3); }
+.orbit .arm:nth-child(5)  .bead { animation-delay: .8s;   background: var(--ap4); }
+.orbit .arm:nth-child(6)  .bead { animation-delay: 1s;    background: var(--ap5); }
+.orbit .arm:nth-child(7)  .bead { animation-delay: 1.2s;  background: var(--ap6); }
+.orbit .arm:nth-child(8)  .bead { animation-delay: 1.4s;  background: var(--ap7); }
+.orbit .arm:nth-child(9)  .bead { animation-delay: 1.6s;  background: var(--ap8); }
+.orbit .arm:nth-child(10) .bead { animation-delay: 1.8s;  background: var(--ap5); }
+
+@keyframes orbit-run {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(11.85em); }
+  100% { transform: translateY(0); }
+}
+/* Inline in a card, and larger when it stands alone on the page. */
+.orbit.sm { font-size: 2.6px; }
+.orbit.lg { font-size: 6px; }
+
+/* ==================================================== 3. AI generating
+   A light sweeping behind the phrase through vertical slits. The original
+   sweeps pure yellow, red, cyan, green and blue, which next to this app's
+   warm palette looks like a different product; the same five stops are taken
+   from the ramp instead, with the accent leading. */
+.aigen {
+  position: relative; display: inline-flex; align-items: center;
+  justify-content: center;
+  height: 60px; padding-inline: 1.1em;
+  /* The original sets 1.6em and then scales the whole thing by 2. Sized
+     directly instead: a transform scale would blur the text and would not
+     take part in the layout, so the panel around it could not make room. */
+  font-size: 2.1rem; font-weight: 600; letter-spacing: .02em;
+  color: #fff; user-select: none;
+  /* Latin word, inside a right-to-left page: isolated so it cannot reorder
+     against the Persian line beneath it. */
+  direction: ltr; unicode-bidi: isolate;
+}
+.aigen .letter {
+  display: inline-block; opacity: 0; z-index: 2;
+  animation: aigen-letter 4s infinite linear;
+}
+.aigen .letter:nth-child(1)  { animation-delay: .1s; }
+.aigen .letter:nth-child(2)  { animation-delay: .2s; }
+.aigen .letter:nth-child(3)  { animation-delay: .3s; }
+.aigen .letter:nth-child(4)  { animation-delay: .4s; }
+.aigen .letter:nth-child(5)  { animation-delay: .5s; }
+.aigen .letter:nth-child(6)  { animation-delay: .6s; }
+.aigen .letter:nth-child(7)  { animation-delay: .7s; }
+.aigen .letter:nth-child(8)  { animation-delay: .8s; }
+.aigen .letter:nth-child(9)  { animation-delay: .9s; }
+.aigen .letter:nth-child(10) { animation-delay: 1s; }
+@keyframes aigen-letter {
+  0%, 100% { opacity: 0; }
+  12%      { opacity: 1; }
+  60%      { opacity: 0; }
+}
+.aigen .scan {
+  position: absolute; inset: 0; z-index: 1;
+  /* The slits. Everything behind them is only visible through these lines,
+     which is what turns a moving blob into a scanning light. */
+  mask: repeating-linear-gradient(90deg,
+    transparent 0, transparent 6px, black 7px, black 8px);
+  -webkit-mask: repeating-linear-gradient(90deg,
+    transparent 0, transparent 6px, black 7px, black 8px);
+}
+.aigen .scan::after {
+  content: ""; position: absolute; inset: 0;
+  /* The original's five primaries. This is the one component here that keeps
+     its own palette: the effect is light splitting through a grating, and the
+     warm ramp -- five neighbouring shades of the same hue -- has nothing to
+     split into. */
+  background-image:
+    radial-gradient(circle at 50% 50%, #ff0 0%, transparent 50%),
+    radial-gradient(circle at 45% 45%, #f00 0%, transparent 45%),
+    radial-gradient(circle at 55% 55%, #0ff 0%, transparent 45%),
+    radial-gradient(circle at 45% 55%, #0f0 0%, transparent 45%),
+    radial-gradient(circle at 55% 45%, #00f 0%, transparent 45%);
+  mask: radial-gradient(circle at 50% 50%, transparent 0%, transparent 10%, black 25%);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 0%, transparent 10%, black 25%);
+  animation: aigen-sweep 2s infinite alternate cubic-bezier(.6, .8, .5, 1),
+             aigen-fade 4s infinite;
+}
+@keyframes aigen-sweep {
+  0%   { transform: translateX(-55%); }
+  100% { transform: translateX(55%); }
+}
+@keyframes aigen-fade {
+  0%, 100% { opacity: 0; }
+  15%      { opacity: 1; }
+  65%      { opacity: 0; }
+}
+
+/* ======================================================= 5. hamburger
+   Moved to app.css, where the button it belongs to is defined.
+
+   It used to live here as a 40x40 icon-only square with flex-direction:
+   column, while app.css described the same control as a pill with a label.
+   This file is concatenated AFTER app.css, so the square won and the word
+   "menu" ended up stacked under a cramped stack of bars in a box too narrow
+   to hold it. One control described by two stylesheets cannot be reasoned
+   about from either of them, so the whole thing -- pill, label, bars and the
+   fold-into-a-cross animation -- is now stated once, next to the breakpoint
+   rules that decide when it appears. */
+
+/* ========================================================== 6. switches
+   A knob that slides, with a glow and sparks when it is on. The original is
+   blue on near-black with a starfield; this keeps the sparks and takes the
+   accent, because in this application orange already means "this is the live
+   one". */
+.sw { position: relative; display: inline-flex; flex: none; }
+.sw input { position: absolute; opacity: 0; width: 0; height: 0; }
+.sw label {
+  position: relative; display: block; cursor: pointer;
+  width: 56px; height: 30px; border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  transition: background var(--normal) var(--ease), border-color var(--normal) var(--ease);
+}
+/* The knob. inset-inline-start, so it starts on the correct side in a
+   right-to-left page and travels the other way. */
+.sw label::after {
+  content: ""; position: absolute; top: 3px; inset-inline-start: 3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--fg-faint);
+  transition: transform .35s cubic-bezier(.4, 0, .2, 1), background var(--normal) var(--ease);
+}
+.sw input:checked + label {
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface-3));
+  border-color: var(--accent);
+}
+.sw input:checked + label::after {
+  background: var(--accent);
+  box-shadow: 0 0 10px 1px color-mix(in srgb, var(--accent) 60%, transparent);
+  /* Positive translate: the logical start is the right-hand side here, and
+     the browser mirrors the axis for us. */
+  transform: translateX(-26px);
+}
+:root[dir="ltr"] .sw input:checked + label::after { transform: translateX(26px); }
+.sw input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The sparks, only while it is on. Each is positioned and timed from inline
+   custom properties, which is how the original varies them without writing a
+   rule per spark. */
+.sw .spark {
+  position: absolute; top: 50%; inset-inline-start: 50%;
+  width: calc(var(--w, 1) * 1px); aspect-ratio: 1;
+  border-radius: 50%; background: var(--accent);
+  opacity: 0; pointer-events: none;
+  transform: rotate(calc(var(--deg, 0) * 1deg)) translateY(0);
+}
+.sw input:checked ~ .sparks .spark {
+  animation: sw-spark calc(var(--dur, 8) * 100ms) linear infinite;
+}
+@keyframes sw-spark {
+  0%   { opacity: 0; transform: rotate(calc(var(--deg) * 1deg)) translateY(6px); }
+  40%  { opacity: 1; }
+  100% { opacity: 0; transform: rotate(calc(var(--deg) * 1deg)) translateY(22px); }
+}
+
+/* The row a switch sits in: the explanation takes the space and the control
+   keeps its size, and the whole label is clickable because the <label> wraps
+   the text rather than only the knob. */
+.swrow { display: grid; gap: var(--s3); }
+.swline {
+  display: flex; align-items: center; gap: var(--s4);
+  padding: var(--s3); border-radius: var(--radius);
+  background: var(--surface-2); border: 1px solid var(--line-soft);
+}
+.swtext { flex: 1; min-width: 0; display: grid; gap: 2px; cursor: pointer; }
+.swtext b { font-size: var(--text-base); font-weight: 650; }
+.swtext span { font-size: var(--text-xs); color: var(--fg-faint); line-height: 1.6; }
+.sw .sparks { position: absolute; inset: 0; pointer-events: none; }
+
+/* A second size, for the header menu: its rows are tighter than a settings
+   card and the full-size track overflows them. The travel is the track width
+   less the knob and its two 3px insets -- 42 - 18 - 6 -- so the knob lands as
+   far from the far edge as it started from the near one. Written as transform,
+   matching the rule it overrides: as `translate` it would be a different
+   property and the two would compose into a 44px jump. */
+.sw-sm label { width: 42px; height: 24px; }
+.sw-sm label::after { width: 18px; height: 18px; }
+.sw-sm input:checked + label::after { transform: translateX(-18px); }
+:root[dir="ltr"] .sw-sm input:checked + label::after { transform: translateX(18px); }
+
+/* A menu row that contains a control rather than being one: it must not look
+   pressable itself, and the switch inside it takes the press. */
+.um-item.um-static { cursor: default; background: transparent; }
+.um-item.um-static:hover { background: transparent; }
+/* .um-item span sets flex:1 so the label fills the row, and it outweighs .sw's
+   own flex:none -- two classes against one. The switch is wrapped in a span
+   too, so without this it stretched across the row and the track went oval. */
+.um-item .sw { flex: none; }
+
+/* ===================================================== 7. search fields
+   A gradient ring that lights up around the field.
+
+   The original layers about ten elements per input -- glow, three border
+   backgrounds, a white layer, a border, two masks -- each carrying a large
+   animated conic gradient. A report here has up to ten filter fields on
+   screen at once, and ten permanently animating conic gradients is work the
+   machine does forever for decoration nobody is looking at. So the ring is
+   one pseudo-element on a wrapper, and it only animates while the field is
+   focused or hovered: the same idea, paid for only when somebody is actually
+   using the control.
+
+   @property is what lets the angle be animated at all -- a plain custom
+   property is not interpolatable, so without this the gradient would jump
+   rather than turn. Browsers that do not support it still get the ring, just
+   static, which is why the fallback is a real gradient and not nothing. */
+@property --ring {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.ring { position: relative; display: block; border-radius: var(--radius-full); }
+.ring::before {
+  content: ""; position: absolute; inset: -2px;
+  border-radius: inherit; padding: 2px;
+  background: conic-gradient(from var(--ring),
+    transparent 0deg,
+    var(--accent) 40deg,
+    var(--ap8) 90deg,
+    transparent 140deg,
+    transparent 360deg);
+  /* Composited so only the 2px band shows: the fill is masked out and the
+     edge remains. */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity var(--normal) var(--ease);
+  pointer-events: none;
+}
+.ring:hover::before { opacity: .45; }
+.ring:focus-within::before {
+  opacity: 1;
+  animation: ring-turn 4s linear infinite;
+}
+@keyframes ring-turn {
+  to { --ring: 360deg; }
+}
+/* The field inside sits on the app's own surface and keeps the radius, so the
+   ring hugs it. */
+/* The report filters are bare <input> and <select> elements -- they take their
+   look from `.filters input` rather than from a class -- so the child is
+   matched by element as well as by class. */
+.ring > .input,
+.ring > .select,
+.ring > input,
+.ring > select {
+  border-radius: var(--radius-full);
+  position: relative; z-index: 1;
+  width: 100%;
+}
+/* The wrapper has to fill the space the field used to, or a field that was
+   sized by its container collapses to its content. */
+.ring { width: 100%; }
+
+/* ============================================ 8. report card shadow
+   The accent-tinted lift asked for on the report cards.
+
+   Layered rather than one blur: a tight dark shadow for contact, a wide dark
+   one for depth, and a warm accent glow that only appears on hover. The tint
+   is the app's own accent at low alpha, so it reads as the card catching the
+   product's colour rather than as a coloured shadow. */
+.card-link {
+  box-shadow:
+    0 2px 1px rgb(0 0 0 / .28),
+    0 4px 2px rgb(0 0 0 / .24),
+    0 8px 4px rgb(0 0 0 / .20),
+    0 16px 8px rgb(0 0 0 / .16),
+    0 32px 16px rgb(0 0 0 / .12);
+  transition: box-shadow var(--normal) var(--ease),
+              transform var(--normal) var(--ease),
+              border-color var(--normal) var(--ease);
+}
+/* Hover keeps the same five-layer structure and warms it: the two widest
+   layers become the accent, which is what makes the lift read as this
+   application's colour rather than as a generic glow. */
+.card-link:hover,
+.card-link:focus-visible {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  box-shadow:
+    0 2px 1px rgb(0 0 0 / .30),
+    0 4px 2px rgb(0 0 0 / .26),
+    0 8px 4px rgb(0 0 0 / .22),
+    0 16px 10px color-mix(in srgb, var(--accent) 20%, rgb(0 0 0 / .18)),
+    0 32px 22px color-mix(in srgb, var(--accent) 24%, rgb(0 0 0 / .14)),
+    0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* ===================================================== reduced motion
+   Both the operating-system preference and this application's own switch.
+   Everything above still renders -- the bead, the ring, the sweep are all
+   visible -- it simply stops moving, which is the point: a person who has
+   asked for less motion still needs to know something is loading. */
+@media (prefers-reduced-motion: reduce) {
+  .searching .bead, .searching .word,
+  .orbit .bead, .aigen .scan::after,
+  .ring:focus-within::before { animation: none !important; }
+  .searching .word { -webkit-text-fill-color: currentColor; }
+  .aigen .scan::after { opacity: .8; }
+  .card-link:hover, .card-link:focus-visible { transform: none; }
+}
+:root[data-motion="reduce"] .searching .bead,
+:root[data-motion="reduce"] .searching .word,
+:root[data-motion="reduce"] .orbit .bead,
+:root[data-motion="reduce"] .aigen .scan::after,
+:root[data-motion="reduce"] .ring:focus-within::before { animation: none !important; }
+:root[data-motion="reduce"] .searching .word { -webkit-text-fill-color: currentColor; }
+:root[data-motion="reduce"] .aigen .scan::after { opacity: .8; }
+/* The letters fade in and out, so with motion off they have to be left
+   visible rather than left at their starting opacity of zero. */
+@media (prefers-reduced-motion: reduce) {
+  .aigen .letter { animation: none !important; opacity: 1; }
+}
+:root[data-motion="reduce"] .aigen .letter { animation: none !important; opacity: 1; }
+
+/* Nothing here is content. */
+@media print {
+  .searching, .orbit, .aigen { display: none !important; }
+  .card-link { box-shadow: none !important; transform: none !important; }
+}
+/* ============================================ Add to Home Screen, on iPhone
+
+   Shown only in mobile Safari, and only when the app is not already
+   installed. An install prompt in an installed app is noise, and on Android
+   the browser offers its own. */
+.a2hs {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: var(--z-toast, 90);
+  padding: var(--s4) max(var(--s4), env(safe-area-inset-right))
+           max(var(--s4), calc(env(safe-area-inset-bottom) + var(--s2)))
+           max(var(--s4), env(safe-area-inset-left));
+  background: var(--surface-2);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -12px 36px -12px rgb(0 0 0 / .6);
+  animation: a2hs-in .3s var(--ease, ease) both;
+}
+/* Nearly opaque, not translucent.
+   At 82% the chart behind it read straight through the panel, which looked
+   like the report's own caption had slipped underneath its chart -- reported
+   as exactly that. A material still, but one you cannot read a bar chart
+   through. */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .a2hs {
+    background: rgb(20 47 64 / .97);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
+  }
+}
+@keyframes a2hs-in { from { transform: translateY(100%); } }
+.a2hs-head { display: flex; align-items: center; gap: var(--s3); }
+.a2hs-head img { width: 42px; height: 42px; border-radius: 10px; flex: none; }
+.a2hs-head b { font-size: var(--text-base); }
+.a2hs-head .hint { margin: 0; font-size: var(--text-xs); }
+.a2hs-steps { display: grid; gap: var(--s2); margin: var(--s4) 0 0; padding: 0; list-style: none; }
+.a2hs-steps li {
+  display: flex; align-items: center; gap: var(--s3);
+  font-size: var(--text-sm); line-height: 1.6;
+}
+.a2hs-steps .n {
+  display: grid; place-items: center; flex: none;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 12.5px; font-weight: 700;
+}
+.a2hs-steps .ic { width: 18px; height: 18px; flex: none; color: var(--accent); }
+.a2hs-acts { display: flex; gap: var(--s3); margin-top: var(--s4); }
+.a2hs-acts .btn { flex: 1; min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .a2hs { animation: none; } }
+:root[data-motion="reduce"] .a2hs { animation: none; }
+
+/* ===================================================== touch targets, on iOS
+
+   Apple asks for 44x44pt, and the audit found three places well under it: the
+   column sort buttons at 20px, the organisational chart's contact links at
+   20px, and the type-size number field at 21px. Raised only where the pointer
+   is coarse, so a desktop keeps its denser tables -- the constraint is the
+   finger, not the screen. */
+@media (pointer: coarse) {
+  .sortbtn { min-height: 44px; padding-block: 12px; }
+  /* 44, not 40. These two were the exceptions to the figure this very comment
+     cites, and they were not visible as exceptions because app.css asks for 44
+     in its own coarse-pointer block -- server.go concatenates that file BEFORE
+     this one, so these two lines quietly won by four pixels.
+     Measured on an emulated iPhone: thirty-three buttons across the builder
+     came out 40px tall, every one of them a .btn-sm. Two stylesheets
+     disagreeing about the same number is how a rule gets obeyed everywhere
+     except where it matters. */
+  .org-c { min-height: 44px; display: inline-flex; align-items: center; padding-block: 8px; }
+  .filters input, .filters select, .input, input[type="number"] { min-height: 44px; }
+  .btn-sm { min-height: 44px; }
+  .btn-icon { min-width: 44px; min-height: 44px; }
+  /* A row of contact links reads as a list on a phone, so they stop sitting
+     shoulder to shoulder where a thumb cannot tell them apart. */
+  .org-card .org-c + .org-c { margin-top: 2px; }
+}
+
+/* ================================================ the sticky bar, on a phone
+
+   The breadcrumb is frosted glass: rgb(20 47 64 / .72) behind a blur. On a
+   desktop that reads as a material. On a phone it does not -- photographed on
+   an iPhone, a date field and a paragraph of Persian were both legible
+   straight through the bar, so the page looked like two layers of text on top
+   of one another rather than one bar over content. The blur stays; the ground
+   beneath it stops being see-through. */
+@media (max-width: 820px), (pointer: coarse) {
+  .crumb { background: rgb(20 47 64 / .97); }
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  @media (max-width: 820px), (pointer: coarse) {
+    .crumb { background: rgb(20 47 64 / .94); }
+  }
+}

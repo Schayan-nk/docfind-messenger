@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{TITLE}} | پیام‌رسان</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/app.css">
+<style>
+  .er { min-height: 100dvh; display: grid; place-items: center; padding: var(--s5); padding-block: var(--s8); }
+  .er-card { width: 100%; max-width: 480px; text-align: center; display: grid; gap: var(--s4); justify-items: center; }
+
+  .er-art { width: min(260px, 68vw); aspect-ratio: 1; color: var(--ap4); }
+  .er-art svg { width: 100%; height: 100%; }
+
+  .er-code {
+    font-family: var(--font-latin); font-size: var(--text-sm); letter-spacing: .14em;
+    color: var(--fg-faint); text-transform: uppercase;
+  }
+  .er-card h1 { margin: 0; font-size: var(--text-xl); font-weight: 650; color: var(--fg); }
+  .er-card p { margin: 0; color: var(--fg-muted); font-size: var(--text-base); line-height: var(--leading); max-width: 38ch; }
+  .er-actions { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: center; }
+  /* 44px tall, so it is a real target on a phone. */
+  .er-actions .btn { min-height: 44px; padding-inline: var(--s5); }
+
+</style>
+</head>
+<body>
+<main class="er">
+  <div class="er-card rise">
+    <div class="er-art">
+      <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="3"
+           stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="ربات">
+        <rect x="30" y="40" width="60" height="46" rx="10"/>
+        <path d="M60 40V27"/><circle cx="60" cy="22" r="5"/>
+        <circle cx="47" cy="60" r="5" fill="currentColor" stroke="none"/>
+        <circle cx="73" cy="60" r="5" fill="currentColor" stroke="none"/>
+        <path d="M50 74h20"/>
+        <path d="M30 56H20v16h10"/>
+        <path d="M90 56h10v16H90"/>
+        <path d="M44 86v10M76 86v10"/>
+      </svg>
+    </div>
+
+    <div class="er-code">{{CODE}}</div>
+    <h1>{{TITLE}}</h1>
+    <p>{{MESSAGE}}</p>
+
+    <div class="er-actions">
+      <a class="btn btn-primary" href="/messages">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
+          <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+        بازگشت به پیام‌ها
+      </a>
+    </div>
+  </div>
+</main>
+
+</body>
+</html>
