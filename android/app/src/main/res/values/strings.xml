@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">پیام‌رسان</string>
+    <string name="offline">اتصال به سرور برقرار نشد. اینترنت را بررسی کنید و دوباره تلاش کنید.</string>
+    <string name="retry">تلاش دوباره</string>
+    <string name="notify_important">پیام‌ها و تماس‌ها</string>
+    <string name="notify_info">دیگر اعلان‌ها</string>
+    <string name="notify_quiet">اعلان‌های بی‌صدا</string>
+    <string name="saved">در «دانلودها» ذخیره شد: %1$s</string>
+    <string name="save_failed">فایل ذخیره نشد.</string>
+    <string name="notify_calls">تماس‌های ورودی</string>
+    <string name="live_channel">اتصال پیام‌رسان</string>
+    <string name="live_title">پیام‌رسان آماده است</string>
+    <string name="live_text">تا پیام‌ها و تماس‌ها با برنامهٔ بسته هم برسند.</string>
+</resources>

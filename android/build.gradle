@@ -1,0 +1,6 @@
+// The messenger for Android: the web application in a WebView, plus what a
+// web page cannot do -- ring for a call and bring messages in while the app is
+// closed, and keep a call going in the background.
+plugins {
+    id "com.android.application" version "8.5.2" apply false
+}

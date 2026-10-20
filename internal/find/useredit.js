@@ -252,7 +252,11 @@
     input.type = 'file';
     input.accept = 'image/png,image/jpeg,image/gif,image/webp';
     input.onchange = async () => {
-      const f = input.files && input.files[0];
+      let f = input.files && input.files[0];
+      if (!f) return;
+      // Framed first, like a person's own picture (photoedit.js).
+      try { f = await (await import('/photoedit.js')).editPhoto(f, { shape: 'circle', size: 512 }); }
+      catch { note('این تصویر باز نشد؛ یک عکس JPG یا PNG انتخاب کنید.'); return; }
       if (!f) return;
       if (f.size > 4 * 1024 * 1024) { note('حجم تصویر بیش از ۴ مگابایت است.'); return; }
       note('در حال ارسال…', 'info');

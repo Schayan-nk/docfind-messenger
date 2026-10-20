@@ -1,0 +1,260 @@
+/* chatglass.css: the messenger in Telegram's iPhone look (the user's
+   screenshots, 2026-10-19): true black, iOS greys, one blue, and "liquid
+   glass" for what floats over scrolling content -- the list's action pill,
+   the folder switch, the chat's header capsules, the message bar. Loaded
+   after messages.html's own <style>, so an equal selector here wins. Tokens
+   first, then the list, the chat, the profile. RTL, dark only. */
+
+body.msgr, body.setg {
+  --surface: #000;
+  --surface-2: #1c1c1e;
+  --surface-3: #2c2c2e;
+  --line: rgb(84 84 88 / .55);
+  --fg: #fff;
+  --fg-muted: #98989f;
+  /* One blue that reads both ways: 4.6:1 on black and under white digits. */
+  --accent: #2d70e8;
+  --accent-ink: #5b9cff;          /* blue words on raised grey */
+  --accent-lift: var(--accent-ink); /* app.css's orange for small accents: blue here too */
+  --accent-soft: rgb(45 112 232 / .2);
+  --bubble-me: linear-gradient(165deg, #3366d6 0%, #5b4fd6 100%);
+  --bubble-them: #1f1f22;
+  --glass: rgb(40 40 44 / .58);
+  --glass-solid: rgb(40 40 44 / .86);   /* where backdrop-filter is missing */
+  --glass-rim: inset 0 1px 0 rgb(255 255 255 / .14), inset 0 0 0 1px rgb(255 255 255 / .05);
+  --glass-drop: 0 8px 26px rgb(0 0 0 / .45);
+  background: #000;
+  caret-color: var(--accent-ink);
+  accent-color: var(--accent);
+  scrollbar-color: #3a3a3c transparent;
+}
+body.msgr ::selection, body.setg ::selection { background: rgb(45 112 232 / .5); color: #fff; }
+
+/* The glass itself: a blurred, lightly tinted pane with a bright upper rim. */
+body.msgr .m-list-acts, body.msgr .m-tabs, body.msgr .m-back, body.msgr .m-chat-head .m-title,
+body.msgr .m-chat-head > .m-icon-btn:not(.m-back), body.msgr .m-compose textarea, body.msgr .m-attach, body.msgr .x-smile {
+  background: var(--glass-solid);
+  box-shadow: var(--glass-rim), var(--glass-drop);
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  body.msgr .m-list-acts, body.msgr .m-tabs, body.msgr .m-back, body.msgr .m-chat-head .m-title,
+  body.msgr .m-chat-head > .m-icon-btn:not(.m-back), body.msgr .m-compose textarea, body.msgr .m-attach, body.msgr .x-smile {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(22px) saturate(170%);
+    backdrop-filter: blur(22px) saturate(170%);
+  }
+}
+
+/* ------------------------------------------------------------ the list */
+body.msgr .m-list { background: #000; border: 0; }
+body.msgr .m-folders { background: #000; border-color: var(--line); }
+body.msgr .m-fold[aria-current="true"] { background: var(--surface-3); }
+body.msgr .m-list-head {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title acts" "search search";
+  align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 8px; border: 0; background: #000;
+}
+body.msgr .m-list-title { grid-area: title; margin: 0; font-size: 1.75rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.2; }
+body.msgr .m-list-acts { grid-area: acts; display: flex; gap: 2px; padding: 3px; border-radius: 999px; }
+body.msgr .m-list-acts .m-icon-btn { width: 40px; height: 40px; color: #fff; }
+body.msgr .m-list-acts .m-icon-btn:hover { background: rgb(255 255 255 / .1); }
+body.msgr .m-list-head #m-filter {
+  grid-area: search; height: 40px; border: 0; border-radius: 999px; background: var(--surface-2); color: var(--fg); padding-inline: 16px;
+}
+body.msgr .m-list-head #m-filter::placeholder { color: var(--fg-muted); }
+body.msgr .m-list-head #m-filter:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+
+/* Folders: a glass segmented switch rather than an underlined row. */
+body.msgr .m-tabs { margin: 2px 12px 8px; padding: 4px; gap: 2px; border: 0; border-radius: 999px; scroll-padding-inline: 4px; }
+body.msgr .m-tab { padding: 8px 14px; border-radius: 999px; color: var(--fg); font-size: .95rem; transition: background var(--dur-fast) var(--ease-out); }
+body.msgr .m-tab[aria-selected="true"] { background: rgb(255 255 255 / .15); }
+body.msgr .m-tab:not([aria-selected="true"]):hover { background: rgb(255 255 255 / .06); }
+body.msgr .m-tab-ink { display: none; }
+body.msgr .m-tab-n { background: #3a3a3c; color: #fff; min-width: 20px; height: 20px; border-radius: 10px; font-size: 11.5px; }
+body.msgr .m-tab[aria-selected="true"] .m-tab-n { background: var(--accent); }
+
+/* Rows at Telegram's measure: a larger face, two lines of the last message,
+   a hairline that starts where the words do. */
+body.msgr .m-rows .m-row { background: #000; }
+body.msgr .m-row { grid-template-columns: 58px minmax(0, 1fr) auto; gap: 12px; padding: 0 14px; min-height: 78px; }
+body.msgr .m-row:hover { background: #0e0e10; }
+body.msgr .m-rows .m-row[aria-current="true"] { background: var(--accent-soft); }
+body.msgr .m-row .m-av { width: 58px; height: 58px; font-size: 21px; }
+body.msgr .m-row-main { align-self: stretch; align-content: center; gap: 2px; padding-block: 10px; border-bottom: 1px solid var(--line); }
+body.msgr .m-rows .m-row:last-child .m-row-main { border-bottom: 0; }
+body.msgr .m-row-top { align-items: baseline; }
+body.msgr .m-row-name { font-size: 1.03rem; font-weight: 650; }
+body.msgr .m-row-time { font-size: .82rem; color: var(--fg-muted); }
+body.msgr .m-row-bot { align-items: flex-start; }
+body.msgr .m-row-last {
+  font-size: .94rem; line-height: 1.45; color: var(--fg-muted); white-space: normal;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+}
+body.msgr .m-row-tick { flex: none; display: inline-grid; color: var(--fg-muted); }
+body.msgr .m-row-tick.read { color: var(--accent-ink); }
+body.msgr .m-row-tick svg { width: 17px; height: 12px; }
+body.msgr .m-row-tick path { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+body.msgr .m-badge { min-width: 22px; height: 22px; border-radius: 11px; font-size: 12.5px; background: var(--accent); }
+body.msgr .m-badge.muted { background: #3a3a3c; }
+body.msgr .m-av .dot { border-color: #000; }
+body.msgr .m-pushhint { background: var(--surface-2); }
+
+/* A phone: no app bar over the list -- the floating bar at the foot already
+   carries the way to settings and the rest, as Telegram's does. */
+@media (max-width: 900px) {
+  body.msgr > .appbar { display: none; }
+  body.msgr { --appbar-h: 0px; }
+}
+
+/* ------------------------------------------------------------ the chat */
+body.msgr .m-chat { background: radial-gradient(130% 55% at 50% 0%, #0c1626 0%, #000 72%); }
+body.msgr .m-chat-head { background: rgb(0 0 0 / .72); border-bottom-color: var(--line); }
+body.msgr .m-back { position: relative; }
+body.msgr .m-back-n {
+  display: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #fff; color: #000;
+  font-size: 12px; font-weight: 700; place-items: center; font-variant-numeric: tabular-nums;
+}
+body.msgr .m-back-n.on { display: inline-grid; }
+
+/* A phone: the header is three floating capsules -- back with the unread
+   count, the name with its last-seen line, the face -- and the messages
+   scroll underneath them. Calls and search live in the profile there. */
+@media (max-width: 900px) {
+  body.msgr .m-chat { padding-top: 0; }
+  body.msgr .m-chat-head {
+    position: absolute; z-index: 6; top: 0; inset-inline: 0; min-height: 0; display: flex; align-items: center; gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px; background: transparent; border: 0; pointer-events: none;
+  }
+  body.msgr .m-chat-head > * { pointer-events: auto; }
+  body.msgr .m-back { order: 0; width: auto; min-width: 46px; height: 46px; padding: 0 12px; gap: 4px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; color: #fff; }
+  body.msgr .m-back svg { width: 24px; height: 24px; }
+  body.msgr .m-chat-head .m-title { order: 1; flex: 0 1 auto; min-width: 0; max-width: 62%; margin-inline: auto; padding: 6px 20px 7px; border-radius: 999px; text-align: center; }
+  body.msgr .m-chat-head .m-title b, body.msgr .m-chat-head .m-title .m-status { text-align: center; }
+  body.msgr .m-chat-head .m-title b { font-size: 1rem; }
+  body.msgr .m-chat-head .m-status { font-size: .78rem; }
+  body.msgr .m-chat-head > .m-icon-btn:not(.m-back) { order: 2; width: 42px; height: 42px; color: #fff; }
+  body.msgr .m-chat-head.t-private > .m-call-btn, body.msgr .m-chat-head.t-private > .m-search-btn { display: none; }
+  body.msgr .m-chat-head .m-av { order: 3; width: 46px; height: 46px; font-size: 17px; box-shadow: var(--glass-drop); }
+  body.msgr .m-msgs { padding-top: calc(70px + env(safe-area-inset-top, 0px)); }
+  body.msgr .m-chat-head + .m-pinbar { margin-top: calc(66px + env(safe-area-inset-top, 0px)); }
+  body.msgr .m-pinbar ~ .m-msgs { padding-top: 10px; }
+}
+
+/* The message bar: the field and its buttons float over the chat's ground. */
+body.msgr .m-foot { background: transparent; border-top: 0; }
+body.msgr .m-compose textarea { border: 0; }
+body.msgr .m-compose textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+body.msgr .m-attach, body.msgr .x-smile { width: 44px; height: 44px; color: #fff; }
+body.msgr .m-send { background: var(--accent); }
+
+/* Bubbles: Telegram's blue-to-violet for one's own, a raised grey for theirs;
+   on the blue, ticks are white, read or not. */
+body.msgr .m-bubble { box-shadow: none; }
+body.msgr .m-bubble.me .m-ticks { color: rgb(255 255 255 / .72); }
+body.msgr .m-bubble.me .m-ticks.read { color: #fff; }
+body.msgr .m-date, body.msgr .m-service { background: rgb(40 40 44 / .7); }
+
+/* ------------------------------------------------------------ the profile */
+body.msgr .p-card { padding: 12px 16px 0; } /* the panel's body has no gutter of its own */
+body.msgr .p-head { display: grid; justify-items: center; gap: 4px; padding-block: 8px 14px; text-align: center; }
+body.msgr .p-head .m-av { width: 112px; height: 112px; font-size: 40px; margin-bottom: 6px; }
+body.msgr .p-name { margin: 0; font-size: 1.6rem; font-weight: 750; letter-spacing: -.01em; }
+body.msgr .p-seen { color: var(--fg-muted); font-size: .92rem; }
+body.msgr .p-seen.online { color: var(--accent-ink); }
+body.msgr .p-acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); gap: 8px; margin-block: 6px 16px; }
+body.msgr .p-act {
+  all: unset; box-sizing: border-box; cursor: pointer; display: grid; justify-items: center; gap: 4px; padding: 10px 4px 9px;
+  border-radius: 14px; background: var(--surface-2); color: var(--accent-ink); font-size: .8rem; font-weight: 600; text-align: center;
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+body.msgr .p-act:hover { background: var(--surface-3); }
+body.msgr .p-act:active { transform: scale(.96); }
+body.msgr .p-act:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+body.msgr .p-act-ic svg { width: 24px; height: 24px; }
+body.msgr .p-rows { background: var(--surface-2); border-radius: 18px; padding: 2px 16px; border: 0; }
+body.msgr .p-rows .p-row { padding-block: 10px; border-bottom: 1px solid var(--line); }
+body.msgr .p-rows .p-row:last-child { border-bottom: 0; }
+body.msgr .p-rows .g-row-text { display: flex; flex-direction: column-reverse; gap: 2px; }
+body.msgr .p-rows .g-row-sub { color: var(--fg); font-size: .85rem; }
+body.msgr .p-rows .p-val { color: var(--accent-ink); font-size: 1.02rem; }
+body.msgr .p-head .m-av.p-zoom { cursor: zoom-in; }
+
+/* Theater: the picture to the full width (chatperson.js, theater). The panel's
+   bar floats over it as two glass circles; the name sits on the picture; the
+   tiles overlap its foot in glass. */
+body.msgr .p-stage {
+  position: relative; display: block; width: calc(100% + 32px); margin: -12px -16px 0;
+  aspect-ratio: 1; max-height: 74vh; overflow: hidden; background: #111; cursor: pointer; outline: none;
+}
+body.msgr .p-stage[hidden] { display: none; }
+body.msgr .p-stage-img { width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; -webkit-user-drag: none; }
+body.msgr .p-stage::after {
+  content: ''; position: absolute; inset: auto 0 0 0; height: 48%; pointer-events: none;
+  background: linear-gradient(to top, rgb(0 0 0 / .66), rgb(0 0 0 / 0));
+}
+body.msgr .p-dashes { position: absolute; z-index: 2; top: calc(6px + env(safe-area-inset-top, 0px)); inset-inline: 12px; display: flex; gap: 4px; }
+body.msgr .p-dashes i { flex: 1; height: 3px; border-radius: 2px; background: rgb(255 255 255 / .38); }
+body.msgr .p-dashes i.on { background: #fff; }
+body.msgr .p-stage-meta { position: absolute; z-index: 2; inset-inline: 18px; bottom: 92px; color: #fff; text-align: start; text-shadow: 0 1px 10px rgb(0 0 0 / .5); }
+body.msgr .p-stage-name { font-size: 1.75rem; font-weight: 750; line-height: 1.25; }
+body.msgr .p-stage-seen { font-size: .98rem; opacity: .86; }
+body.msgr .g-screen.p-theater { grid-template-rows: minmax(0, 1fr); }
+body.msgr .p-theater .g-head { position: absolute; z-index: 5; inset-inline: 0; top: 0; background: none; border: 0; padding-top: calc(16px + env(safe-area-inset-top, 0px)); }
+body.msgr .p-theater .g-title { opacity: 0; }
+body.msgr .p-theater .g-head .m-icon-btn { width: 44px; height: 44px; border-radius: 50%; color: #fff; background: rgb(30 30 34 / .55); box-shadow: var(--glass-rim); }
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  body.msgr .p-theater .g-head .m-icon-btn, body.msgr .p-theater .p-act { -webkit-backdrop-filter: blur(20px) saturate(170%); backdrop-filter: blur(20px) saturate(170%); }
+}
+body.msgr .p-theater .p-head { padding: 0; }
+body.msgr .p-theater .p-head > :not(.p-stage) { display: none; }
+body.msgr .p-theater .p-acts { position: relative; z-index: 3; margin-top: -80px; }
+body.msgr .p-theater .p-act { background: rgb(60 60 66 / .42); color: #fff; box-shadow: var(--glass-rim); }
+
+/* ------------------------------------------------------------ the keyboard
+   The chat glides to the height it will have (messages.js); and should iPhone
+   still move the page, what shows above the chat is black, never the list. */
+@media (max-width: 900px) {
+  body.msgr.open .m-chat { box-shadow: 0 -100vh 0 0 #000; }
+  body.msgr.open .m-chat.kb-glide { transition: height .26s cubic-bezier(.2, 0, 0, 1), top .26s cubic-bezier(.2, 0, 0, 1); }
+}
+
+/* ------------------------------------------------------------ search
+   Telegram's (2026-10-19): people one talks to most in a row, the recent
+   ones below with «پاک کردن»; on a phone the field and its × float at the
+   foot, above the keyboard, the filter chips above them (chatsearch.js). */
+body.msgr .m-find-x { display: none; }
+body.msgr .m-top-people { display: flex; gap: 12px; overflow-x: auto; padding: 8px 4px 16px; scrollbar-width: none; }
+body.msgr .m-top-people::-webkit-scrollbar { display: none; }
+body.msgr .m-top-p { all: unset; cursor: pointer; flex: none; width: 74px; display: grid; justify-items: center; gap: 6px; }
+body.msgr .m-top-p .m-av { width: 66px; height: 66px; font-size: 25px; }
+body.msgr .m-top-p .m-av .dot { display: none; }
+body.msgr .m-top-n { max-width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .84rem; color: var(--fg); }
+body.msgr .m-rec-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 6px 4px; color: var(--fg-muted); font-size: .88rem; font-weight: 650; }
+body.msgr .m-rec-clear { all: unset; cursor: pointer; color: var(--accent-ink); font-weight: 500; }
+body.msgr .m-top-p:focus-visible, body.msgr .m-rec-clear:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; border-radius: 12px; }
+@media (max-width: 900px) {
+  body.msgr.m-searching .m-list-title, body.msgr.m-searching .m-list-acts, body.msgr.m-searching .m-tabs,
+  body.msgr.m-searching .m-pushhint, body.msgr.m-searching .glass-dock { display: none !important; }
+  body.msgr.m-searching #m-filter, body.msgr.m-searching .m-find-x {
+    position: fixed; z-index: 45; margin: 0; height: 52px;
+    top: calc(var(--vv-top, 0px) + var(--vv-h, 100dvh) - 64px - var(--find-safe, env(safe-area-inset-bottom, 0px)));
+    background: var(--glass-solid); box-shadow: var(--glass-rim), var(--glass-drop);
+  }
+  html.kb-open { --find-safe: 0px; }
+  body.msgr.m-searching #m-filter { inset-inline: 14px 76px; width: auto; border-radius: 999px; padding-inline: 18px; border-color: transparent; }
+  body.msgr.m-searching .m-find-x { display: grid; place-items: center; inset-inline-end: 14px; width: 52px; border-radius: 50%; color: var(--fg); }
+  body.msgr.m-searching .m-kinds {
+    position: fixed; z-index: 45; inset-inline: 14px; margin: 0; padding: 5px; border-radius: 999px; overflow-x: auto; scrollbar-width: none;
+    top: calc(var(--vv-top, 0px) + var(--vv-h, 100dvh) - 124px - var(--find-safe, env(safe-area-inset-bottom, 0px)));
+    background: var(--glass-solid); box-shadow: var(--glass-rim), var(--glass-drop);
+  }
+  body.msgr.m-searching .m-search { padding-bottom: 150px; }
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  body.msgr.m-searching #m-filter, body.msgr.m-searching .m-find-x, body.msgr.m-searching .m-kinds {
+    background: var(--glass); -webkit-backdrop-filter: blur(22px) saturate(170%); backdrop-filter: blur(22px) saturate(170%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.msgr .m-tab, body.msgr .p-act { transition: none; }
+}

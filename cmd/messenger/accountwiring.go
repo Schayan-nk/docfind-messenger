@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -33,6 +34,14 @@ func useAccounts(app *find.Server, acc accountSetup, o options) (cleanup func())
 	stateDir := filepath.Dir(o.usersFile)
 	sessions := auth.OpenSessions(filepath.Join(stateDir, "sessions.json"))
 	app.UseSessions(sessions, filepath.Join(stateDir, "avatars"))
+
+	// Invite-only self-registration (registerroutes.go). On by default; a code
+	// is still needed for every account, so an open /register cannot be abused.
+	// DOCFIND_REGISTRATION=off turns the page and its API off entirely.
+	if !strings.EqualFold(strings.TrimSpace(os.Getenv("DOCFIND_REGISTRATION")), "off") {
+		app.UseInvites(auth.OpenInvites(filepath.Join(stateDir, "invites.json")))
+		logf("self-registration on: /register (invite codes in %s)", filepath.Join(stateDir, "invites.json"))
+	}
 
 	// Notifications on people's own devices, delivered with the page closed.
 	startNotifications(app, acc.pgDB, stateDir)

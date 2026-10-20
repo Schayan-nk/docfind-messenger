@@ -51,10 +51,15 @@ async function record(btn, chat, kind, x0, y0, pointerId) {
   const ui = overlay(kind, stream);
   const t0 = performance.now();
   let locked = false, done = false, raf = 0, typingAt = 0;
+  // A round video's poster is taken while the camera is live, once it has
+  // warmed up. Taken after the tracks stopped, it was a black frame: the
+  // bubble stayed a black circle, for both people, until it was tapped.
+  let poster = '';
   const tick = () => {
     const ms = performance.now() - t0;
     const l = level(); levels.push(l);
     ui.update(ms, l);
+    if (kind === 'round' && !poster && ms > 450) poster = ui.poster();
     if (Date.now() - typingAt > 3000) { typingAt = Date.now(); S.net.send('typing', { chat: chat.id, action: kind === 'voice' ? 'voice' : 'video' }); }
     if (ms >= (kind === 'round' ? ROUND_MAX : VOICE_MAX)) { finish(true); return; }
     raf = requestAnimationFrame(tick);
@@ -76,6 +81,7 @@ async function record(btn, chat, kind, x0, y0, pointerId) {
 
   function finish(send) {
     if (done) return; done = true;
+    if (kind === 'round' && !poster) poster = ui.poster(); // the camera is still on here
     cancelAnimationFrame(raf);
     btn.removeEventListener('pointermove', move);
     try { btn.releasePointerCapture && btn.releasePointerCapture(pointerId); } catch { }
@@ -89,7 +95,7 @@ async function record(btn, chat, kind, x0, y0, pointerId) {
       const blob = new Blob(parts, { type: type.split(';')[0] });
       const wave = downsample(levels, 64);
       if (kind === 'voice') hooks.sendRecorded(blob, { kind: 'voice', dur, wave }, { dur });
-      else hooks.sendRecorded(blob, { kind: 'round', dur, w: ui.size || 480, h: ui.size || 480, poster: ui.poster() }, { dur, poster: '' });
+      else hooks.sendRecorded(blob, { kind: 'round', dur, w: ui.size || 480, h: ui.size || 480, poster }, { dur, poster: poster ? 'data:image/jpeg;base64,' + poster : '' });
     };
     rec.stop();
   }

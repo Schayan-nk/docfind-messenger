@@ -26,6 +26,15 @@ import '/chatextras.js'; // phase 11: polls, locations, stickers and GIFs, sched
 hooks.jumpTo = jumpTo;
 
 // ---------------------------------------------------------------- chat list
+// A last message that was media reads as its icon and what it was, or the
+// icon before its caption (a file shows its name) -- never a blank line.
+const MEDIA = { photo: ['📷', 'عکس'], video: ['🎥', 'ویدیو'], round: ['📹', 'پیام ویدیویی'], voice: ['🎤', 'پیام صوتی'], file: ['📎', 'فایل'], doc: ['📄', 'سند'] };
+function lastText(last) {
+  const words = plain(last.text), m = MEDIA[last.kind];
+  if (!m) return words;
+  const name = last.kind === 'file' && last.media && last.media.name;
+  return m[0] + ' ' + (words || name || m[1]);
+}
 function preview(chat) {
   const t = S.typing.get(chat.id);
   if (t && t.until > Date.now()) { const d = el('span', 'm-dots'); d.append(el('i'), el('i'), el('i')); return d; }
@@ -34,7 +43,7 @@ function preview(chat) {
   if (!last) return document.createTextNode('');
   if (last.kind === 'service' && hooks.serviceText) return document.createTextNode(hooks.serviceText(last, chat));
   const who = last.from === S.me && chat.type !== 'saved' ? 'شما: ' : (hooks.lastPrefix ? hooks.lastPrefix(chat, last) : '');
-  return document.createTextNode(who + plain(last.text));
+  return document.createTextNode(who + lastText(last));
 }
 function sortedChats() {
   return [...S.chats.values()]
@@ -42,6 +51,23 @@ function sortedChats() {
     .filter(c => !S.filter || (c.title || '').toLowerCase().includes(S.filter))
     .filter(c => !hooks.hideChat || !hooks.hideChat(c))
     .sort(hooks.order || ((a, b) => new Date((b.last && b.last.at) || 0) - new Date((a.last && a.last.at) || 0)));
+}
+// One's own last message carries the ticks the bubbles do: one once the
+// server has it, two (blue) once the other side has read it, a clock while
+// it is still on its way.
+function rowTick(chat) {
+  const l = chat.last;
+  if (!l || l.from !== S.me || l.kind === 'service' || chat.type === 'saved' || chat.type === 'channel') return null;
+  const s = el('span', 'm-row-tick'); s.setAttribute('role', 'img');
+  if (!l.pts) {
+    s.setAttribute('aria-label', 'در صف ارسال');
+    s.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 1.5"/></svg>';
+    return s;
+  }
+  const read = !!(chat.peer_read_pts && l.pts <= chat.peer_read_pts);
+  s.classList.toggle('read', read); s.setAttribute('aria-label', read ? 'خوانده شد' : 'فرستاده شد');
+  s.innerHTML = `<svg viewBox="0 0 18 12" aria-hidden="true"><path d="M1 6.5l3.2 3.2L11 2.5"/>${read ? '<path d="M6.8 9.7L7.4 10.3 15.6 2.5"/>' : ''}</svg>`;
+  return s;
 }
 function rowFor(chat) {
   const r = el('button', 'm-row'); r.type = 'button'; r.dataset.key = String(chat.id); r.setAttribute('role', 'listitem');
@@ -55,7 +81,8 @@ function rowFor(chat) {
   const at = el('span', 'm-badge m-badge-at' + (chat.mentions ? ' on' : ''), '@'); at.setAttribute('aria-label', chat.mentions ? 'از شما نام برده شده' : '');
   const badge = el('span', 'm-badge' + (chat.unread ? ' on' : ''), chat.unread ? fa(chat.unread) : '');
   badge.setAttribute('aria-label', chat.unread ? `${fa(chat.unread)} پیام خوانده‌نشده` : '');
-  top.append(name, time); bot.append(last, at, badge); main.append(top, bot);
+  const tick = rowTick(chat);
+  top.append(...(tick ? [name, tick, time] : [name, time])); bot.append(last, at, badge); main.append(top, bot);
   r.append(avatar(chat), main);
   r.addEventListener('click', () => openChat(chat.id));
   if (hooks.decorRow) hooks.decorRow(chat, r);
@@ -67,7 +94,8 @@ function renderList() {
   const list = sortedChats();
   flip(box, () => {
     const old = new Map([...box.querySelectorAll('.m-row')].map(r => [r.dataset.key, r]));
-    box.replaceChildren(...(hooks.listHead ? hooks.listHead() : []), ...list.map(c => {
+    const note = hooks.notifyRow ? hooks.notifyRow() : null; // notifications: how to get them here (chatnotify.js)
+    box.replaceChildren(...(note ? [note] : []), ...(hooks.listHead ? hooks.listHead() : []), ...list.map(c => {
       const next = rowFor(c), prev = old.get(String(c.id));
       if (prev) { // keep the badge element so its count can roll and its scale can spring
         const pb = prev.querySelector('.m-badge:not(.m-badge-at)'), nb = next.querySelector('.m-badge:not(.m-badge-at)');
@@ -77,6 +105,13 @@ function renderList() {
     }));
     if (!list.length) box.appendChild(el('div', 'm-empty', S.filter ? 'گفت‌وگویی با این نام پیدا نشد.' : S.folder === 'all' ? 'هنوز گفت‌وگویی ندارید.' : 'گفت‌وگویی در این پوشه نیست.'));
   });
+  // The open chat's way back counts what waits elsewhere (muted chats aside).
+  const waiting = $('m-back-n');
+  if (waiting) {
+    let n = 0;
+    for (const c of S.chats.values()) if (c.id !== S.active && !(c.muted_until && new Date(c.muted_until) > new Date())) n += c.unread || 0;
+    waiting.textContent = n ? fa(n) : ''; waiting.classList.toggle('on', n > 0);
+  }
   if (hooks.listRendered) hooks.listRendered();
 }
 hooks.renderList = renderList;
@@ -110,6 +145,15 @@ async function openChat(id) {
     jump.classList.toggle('on', msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight > msgs.clientHeight);
     if (S.atBottom) markRead();
   }, { passive: true });
+  // Pinned to the newest message while the reader is there. What arrives
+  // after the chat was placed -- a photo, a video's frame, the fonts, a
+  // taller message bar, the keyboard -- grows or shrinks the list under the
+  // view, and left it stranded above the newest message after a refresh.
+  // Somebody who scrolled up to read is never moved.
+  const pin = () => { if (S.atBottom && S.active === id) msgs.scrollTop = msgs.scrollHeight; };
+  msgs.addEventListener('load', pin, true); // images and posters: load does not bubble, so catch it on the way down
+  new ResizeObserver(pin).observe(msgs);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(pin);
   paintStatus();
   renderList();
   hooks.openGroup && hooks.openGroup(chat);
@@ -143,13 +187,21 @@ let topObs;
 function watchTop() {
   const box = $('m-msgs'); if (!box) return;
   topObs && topObs.disconnect();
+  // At most two older pages without the person scrolling. A layout that left
+  // the top of the chat always in view once fetched the whole history, page
+  // after page, over mobile data. Their own scrolling re-arms it.
+  if (!box.dataset.olderGuard) {
+    box.dataset.olderGuard = '1'; S.olderRun = 0;
+    const arm = () => { S.olderRun = 0; };
+    for (const t of ['wheel', 'touchmove', 'pointerdown', 'keydown']) box.addEventListener(t, arm, { passive: true });
+  }
   topObs = new IntersectionObserver(async ents => {
-    if (!ents.some(e => e.isIntersecting) || S.loadingOlder) return;
+    if (!ents.some(e => e.isIntersecting) || S.loadingOlder || S.olderRun >= 2) return;
     const chat = S.chats.get(S.active);
     const inTopic = chat && chat.forum && S.topic != null;
     const list = (S.msgs.get(S.active) || []).filter(m => !inTopic || hooks.topicFilter(m)); const oldest = list.find(m => m.pts);
     if (!oldest || oldest.pts <= 1) return;
-    S.loadingOlder = true;
+    S.loadingOlder = true; S.olderRun++;
     try {
       const r = await fetch(`/api/chat/chats/${S.active}/messages?before=${oldest.pts}&limit=50${inTopic ? hooks.topicQuery() : ''}`, { credentials: 'same-origin' });
       const older = r.ok ? (await r.json()).messages || [] : [];
@@ -183,7 +235,7 @@ function accept(m) {
   const wasNew = !list || !list.some(x => x.pts === m.pts || (m.cid && x.cid === m.cid && x.pts));
   merge(m.chat, [m]);
   chat.pts = Math.max(chat.pts, m.pts);
-  if (!chat.last || new Date(m.at) >= new Date(chat.last.at)) chat.last = { id: m.id, text: m.text, from: m.from, at: m.at, kind: m.kind, service: m.service, from_name: m.from_name };
+  if (!chat.last || new Date(m.at) >= new Date(chat.last.at)) chat.last = { id: m.id, pts: m.pts, text: m.text, from: m.from, at: m.at, kind: m.kind, media: m.media, service: m.service, from_name: m.from_name };
   if (m.from !== S.me && wasNew) {
     if (S.active === m.chat && S.atBottom && !document.hidden) markRead();
     else chat.unread = (chat.unread || 0) + 1;
@@ -206,7 +258,7 @@ function applyUpdate(u) {
     case 'message': accept(d); break;
     case 'read':
       if (d.user === S.me) { chat.read_pts = Math.max(chat.read_pts, d.pts); chat.unread = 0; chat.mentions = 0; renderList(); }
-      else { chat.peer_read_pts = Math.max(chat.peer_read_pts, d.pts); if (S.active === chat.id) renderMessages(); }
+      else { chat.peer_read_pts = Math.max(chat.peer_read_pts, d.pts); renderList(); if (S.active === chat.id) renderMessages(); } // the list's ticks turn blue too
       break;
     case 'edit': {
       const m = findMsg(chat.id, d.id);
@@ -298,19 +350,78 @@ hooks.start = start;
 // out of sight. The open chat follows the visible part of the screen
 // instead, the page itself never scrolls under it, and the newest message
 // stays right above the message bar.
+//
+// It acts only when the visible part really changed, once a frame. iPhone
+// fires viewport events all through an ordinary scroll; answering each one by
+// re-measuring the chat and pinning it to the newest message pulled the list
+// back down under the finger. Only a change of height -- the keyboard coming
+// or going -- keeps the newest message in view.
+//
+// While the keyboard comes or goes it is followed every frame. iPhone moves
+// the visible part first and says so only afterwards, and the chat used to
+// wait for the word: for a moment, as the keyboard closed, the whole chat sat
+// where the keyboard had pushed it, a quarter of the screen down, with the
+// list showing above it (the recording of 2026-10-19).
 (() => {
   const vv = window.visualViewport; if (!vv) return;
   const root = document.documentElement;
+  let h0 = -1, top0 = -1, raf = 0, until = 0, hold = 0;
+  // The keyboard's height, remembered: before it comes back the chat is
+  // already that much shorter, so iPhone finds the message box uncovered and
+  // does not push the page up at all -- and with nothing pushed up there is
+  // nothing to snap back down when the keyboard goes, which is the jump that
+  // following the keyboard frame by frame could not catch (still there on
+  // 2026-10-19 after that try).
+  let kb = 0; try { kb = Number(localStorage.getItem('msgr.kb')) || 0; } catch { }
+  const box = () => $('m-input');
+  const glide = () => { const c = $('m-chat'); if (!c) return; c.classList.add('kb-glide'); clearTimeout(glide.t); glide.t = setTimeout(() => c.classList.remove('kb-glide'), 420); };
   const fit = () => {
-    root.style.setProperty('--vv-h', vv.height + 'px');
-    root.style.setProperty('--vv-top', vv.offsetTop + 'px');
-    if (!document.body.classList.contains('open')) return;
-    if (window.scrollY) window.scrollTo(0, 0);
-    const box = $('m-msgs');
-    if (box && S.atBottom) box.scrollTop = box.scrollHeight;
+    raf = 0;
+    const h = Math.round(vv.height), top = Math.round(vv.offsetTop);
+    const k = window.innerHeight - h;
+    root.classList.toggle('kb-open', k > 150);
+    if (k > 150 && document.activeElement === box() && Math.abs(k - kb) > 4) { kb = k; try { localStorage.setItem('msgr.kb', String(k)); } catch { } }
+    if (performance.now() < hold) { if (performance.now() < until) raf = requestAnimationFrame(fit); return; }
+    if (h !== h0 || top !== top0) {
+      const resized = h0 >= 0 && h !== h0;
+      h0 = h; top0 = top;
+      root.style.setProperty('--vv-h', h + 'px');
+      root.style.setProperty('--vv-top', top + 'px');
+      if (document.body.classList.contains('open')) {
+        if (window.scrollY) window.scrollTo(0, 0);
+        const box = $('m-msgs');
+        if (resized && box && S.atBottom) box.scrollTop = box.scrollHeight;
+      }
+    }
+    if (performance.now() < until) raf = requestAnimationFrame(fit);
   };
-  vv.addEventListener('resize', fit);
-  vv.addEventListener('scroll', fit);
+  const follow = ms => { until = Math.max(until, performance.now() + ms); if (!raf) raf = requestAnimationFrame(fit); };
+  vv.addEventListener('resize', () => follow(400));
+  vv.addEventListener('scroll', () => follow(400));
+  // A text box gaining or losing focus is the keyboard about to move.
+  const typing = e => e.target && e.target.matches && e.target.matches('input, textarea, [contenteditable="true"]');
+  document.addEventListener('focusin', e => { if (typing(e)) follow(1000); });
+  // Pressing the message box: the chat takes the height it will have before
+  // the keyboard arrives; a press that ends elsewhere puts it back.
+  document.addEventListener('touchstart', e => {
+    const i = box();
+    if (!kb || !i || e.target !== i || document.activeElement === i || !document.body.classList.contains('open')) return;
+    glide(); h0 = top0 = -1;
+    root.style.setProperty('--vv-top', '0px'); root.style.setProperty('--vv-h', (window.innerHeight - kb) + 'px');
+    hold = performance.now() + 450;
+    setTimeout(() => { if (document.activeElement !== i) { hold = 0; glide(); fit(); } }, 800);
+  }, { capture: true, passive: true });
+  // The keyboard going: straight to the whole height, gliding down with it,
+  // rather than waiting for iPhone to say so.
+  document.addEventListener('focusout', e => {
+    if (!typing(e)) return;
+    if (e.target === box() && document.body.classList.contains('open')) {
+      glide(); h0 = top0 = -1;
+      root.style.setProperty('--vv-top', '0px'); root.style.setProperty('--vv-h', window.innerHeight + 'px');
+      hold = performance.now() + 450;
+    }
+    follow(1000);
+  });
   fit();
 })();
 
@@ -378,6 +489,9 @@ function wire() {
     } else setConn(s);
   });
   net.addEventListener('synced', () => setConn('online'));
+  // Back from the background on a socket that lived: who is online and when
+  // others were last seen may have changed while the page was frozen.
+  net.addEventListener('resumed', () => refreshChats());
   net.addEventListener('ready', e => { const d = e.detail.d || {}; S.me = d.user || S.me; if (Array.isArray(d.reactions) && d.reactions.length) S.reactions = d.reactions; });
   net.addEventListener('update', e => applyUpdate(e.detail.d));
   net.addEventListener('diff', e => { for (const u of e.detail.d.updates || []) applyUpdate(u); });
@@ -397,13 +511,27 @@ function wire() {
 }
 
 async function boot() {
-  const me = await fetch('/api/me', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).catch(() => null);
-  S.me = (me && (me.username || (me.user && me.user.username))) || '';
+  // Who is signed in -- but a stalled network must not keep the chats this
+  // phone already has from the screen (2026-10-19: six minutes of a blank app
+  // while the connection hung). Past a moment without an answer, it is
+  // whoever was signed in here last, their chats from this phone's store;
+  // the answer, when it comes, corrects that if it has to. undefined is no
+  // answer at all; an answer of nobody is the server's to give.
+  const nameOf = m => (m && (m.username || (m.user && m.user.username))) || '';
+  const keep = u => { try { if (u) localStorage.setItem('msgr.me', u); } catch { } };
+  const ask = fetch('/api/me', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null, () => undefined);
+  const me = await Promise.race([ask, new Promise(done => setTimeout(done, 2500))]);
+  if (me === undefined) {
+    try { S.me = localStorage.getItem('msgr.me') || ''; } catch { S.me = ''; }
+    ask.then(late => { if (late && nameOf(late) !== S.me) location.reload(); else if (late) keep(nameOf(late)); });
+  } else { S.me = nameOf(me); keep(S.me); }
   S.cache = await new Cache(S.me || 'anon').open();
   for (const c of await S.cache.chats()) S.chats.set(c.id, c);
   wire();
   if (S.chats.size) renderList();
-  await refreshChats();
+  // The list from the server, but not waited on for ever: the socket brings
+  // what is new once the network is back.
+  await Promise.race([refreshChats(), new Promise(done => setTimeout(done, 4000))]);
   S.net.connect();
   const m = location.hash.match(/^#c(\d+)$/); if (m && S.chats.has(Number(m[1]))) openChat(Number(m[1]));
   // A link to #c<id> while this page is open (a message found with Ctrl+K,
@@ -413,5 +541,9 @@ async function boot() {
     if (id && S.chats.has(id) && S.active !== id) openChat(id);
   });
   hooks.joinFromHash && hooks.joinFromHash();
+  // Opened from the settings page's rows: saved messages, the calls, the folders.
+  const go = { '#saved': () => start(S.me), '#calls': () => import('/chatcalls.js').then(m => m.openCalls()),
+    '#folders': () => import('/chatfolders.js').then(m => m.openFolders()) }[location.hash];
+  if (go) { history.replaceState(null, '', location.pathname); go(); }
 }
 boot();

@@ -2283,7 +2283,10 @@
   };
 
   if (!isIOS() || !isSafari() || installed() || dismissed()) return;
-  setTimeout(show, DELAY);
+  // The messenger asks for this itself, at the top of its list and with the
+  // reason that matters there (an iPhone only notifies the Home Screen app);
+  // this panel would sit over its message bar.
+  setTimeout(() => { if (!document.body.classList.contains('msgr')) show(); }, DELAY);
 })();
 
 // --------------------------------------------- the worker, and telling people

@@ -6,7 +6,7 @@
 // (normalize.go). A hashtag in a message searches its chat.
 import { reduced } from '/chatcore.js';
 import { $, el, fa, svg, timeFmt, dayFmt, dayKey, S, hooks, toast } from '/chatstate.js';
-import { avatar } from '/chatpane.js';
+import { avatar, statusText } from '/chatpane.js';
 import { plain } from '/chatfmt.js';
 import { api, openPanel } from '/chatgroup.js';
 
@@ -115,7 +115,7 @@ async function globalSearch(more) {
   if (!G.kind && chats.length) kids.push(section('گفت‌وگوها', chats.map(c => {
     const r = el('button', 'm-row'); r.type = 'button';
     const n = el('div', 'm-row-name'); n.dir = 'auto'; n.appendChild(marked(c.title, ws));
-    r.append(avatar(c), n); r.addEventListener('click', () => { clearSearch(); hooks.openChat(c.id); });
+    r.append(avatar(c), n); r.addEventListener('click', () => { remember(c.id); clearSearch(); hooks.openChat(c.id); });
     return r;
   })));
   if (!G.kind && people.length) kids.push(section('همکاران', people.map(pp => {
@@ -135,7 +135,7 @@ async function globalSearch(more) {
       if (m.from_name && c.type !== 'private' && c.type !== 'saved') t.appendChild(el('b', '', (m.from === S.me ? 'شما' : m.from_name) + ': '));
       t.appendChild(marked(snippet(m, ws), ws));
       bot.appendChild(t); main.append(top, bot); r.append(avatar(c), main);
-      r.addEventListener('click', () => open(m, ws));
+      r.addEventListener('click', () => { remember(m.chat); open(m, ws); });
       return r;
     });
     if (msgs.length === 30) {
@@ -149,20 +149,76 @@ async function globalSearch(more) {
 }
 function clearSearch() {
   const f = $('m-filter'); if (f) f.value = '';
-  S.filter = ''; G.q = ''; G.kind = ''; show(false); hooks.renderList();
+  S.filter = ''; G.q = ''; G.kind = ''; show(false);
+  searching = false; document.body.classList.remove('m-searching');
+  hooks.renderList();
 }
 hooks.clearSearch = clearSearch;
+
+// ------------------------------------------------------------ before a word
+// Telegram's search (2026-10-19): the people one writes to most, in a row of
+// faces, and the chats opened from search before, with «پاک کردن» -- until
+// a word is typed. Kept on this phone only.
+const RECENT = 'msgr.recent';
+const recentIds = () => { try { return (JSON.parse(localStorage.getItem(RECENT) || '[]') || []).filter(Number.isFinite); } catch { return []; } };
+function remember(id) { try { localStorage.setItem(RECENT, JSON.stringify([id, ...recentIds().filter(x => x !== id)].slice(0, 12))); } catch { } }
+const at = c => Date.parse((c.last && c.last.at) || 0) || 0;
+function recents() {
+  const p = panel(), kids = [];
+  const go = c => () => { remember(c.id); clearSearch(); hooks.openChat(c.id); };
+  const often = [...S.chats.values()].filter(c => c.type === 'private' && c.peer && (!hooks.hideChat || !hooks.hideChat(c)))
+    .sort((a, b) => at(b) - at(a)).slice(0, 10);
+  if (often.length) {
+    const strip = el('div', 'm-top-people'); strip.setAttribute('aria-label', 'پرتماس‌ها');
+    for (const c of often) {
+      const b = el('button', 'm-top-p'); b.type = 'button';
+      const n = el('span', 'm-top-n', (c.title || '').trim().split(/\s+/)[0]); n.dir = 'auto';
+      b.append(avatar(c), n); b.addEventListener('click', go(c)); strip.appendChild(b);
+    }
+    kids.push(strip);
+  }
+  const rec = recentIds().map(id => S.chats.get(id)).filter(Boolean);
+  if (rec.length) {
+    const head = el('div', 'm-rec-head'), clr = el('button', 'm-rec-clear', 'پاک کردن'); clr.type = 'button';
+    clr.addEventListener('click', () => { try { localStorage.removeItem(RECENT); } catch { } recents(); });
+    head.append(el('span', '', 'اخیر'), clr); kids.push(head);
+    for (const c of rec) {
+      const r = el('button', 'm-row'); r.type = 'button';
+      const main = el('div', 'm-row-main'), n = el('div', 'm-row-name', c.title); n.dir = 'auto';
+      main.append(n, el('div', 'm-row-last', statusText(c).text || ''));
+      r.append(avatar(c), main); r.addEventListener('click', go(c)); kids.push(r);
+    }
+  }
+  if (!kids.length) kids.push(el('div', 'm-empty', 'نام یک گفت‌وگو یا همکار، یا واژه‌ای از پیام‌ها را بنویسید.'));
+  p.replaceChildren(...kids);
+}
+let searching = false;
+function enter() {
+  if (searching) return;
+  searching = true; document.body.classList.add('m-searching');
+  if (!$('m-find-x')) {
+    const x = el('button', 'm-icon-btn m-find-x'); x.id = 'm-find-x'; x.type = 'button'; x.setAttribute('aria-label', 'بستن جستجو'); x.innerHTML = svg(X);
+    x.addEventListener('pointerdown', e => e.preventDefault()); // keeps the keyboard until the press is done
+    x.addEventListener('click', () => { $('m-filter').blur(); clearSearch(); });
+    $('m-filter').after(x);
+  }
+  if (!G.q) { show(true); recents(); }
+}
+// The dock's round search button means this search on this page.
+window.DocfindPageSearch = () => { const f = $('m-filter'); if (f) f.focus(); };
+
 function wireGlobal() {
   const f = $('m-filter'); if (!f) return;
-  f.placeholder = 'جستجو در گفت‌وگوها و پیام‌ها';
+  f.placeholder = 'جستجو';
   let t;
+  f.addEventListener('focus', enter);
   f.addEventListener('input', () => {
     clearTimeout(t);
     const q = f.value.trim();
-    if (q.length < 2) { G.q = ''; show(false); return; }
+    if (q.length < 2) { G.q = ''; if (searching) recents(); else show(false); return; }
     t = setTimeout(() => { G.q = q; show(true); globalSearch(); }, 250);
   });
-  f.addEventListener('keydown', e => { if (e.key === 'Escape' && f.value) { e.preventDefault(); clearSearch(); } });
+  f.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); f.blur(); clearSearch(); } });
 }
 
 // ------------------------------------------------------------ in a chat

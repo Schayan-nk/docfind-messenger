@@ -264,7 +264,11 @@ func (s *Server) handleAvatarUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.saveAvatar(subject.Username, raw); err != nil {
+	// Kept with the earlier ones (photos.go), and drawn everywhere from now on.
+	s.galleryMu.Lock()
+	p, err := s.galleryAdd(subject.Username, raw)
+	s.galleryMu.Unlock()
+	if err != nil {
 		if errors.Is(err, errNotImage) {
 			writeJSONError(w, http.StatusUnsupportedMediaType,
 				`{"error":"فقط تصویر JPEG، PNG، GIF یا WebP پذیرفته می‌شود."}`)
@@ -277,60 +281,17 @@ func (s *Server) handleAvatarUpload(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, `{"error":"ذخیره تصویر انجام نشد."}`)
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true, "username": subject.Username})
+	writeJSON(w, map[string]any{"ok": true, "username": subject.Username, "photo": p})
 }
 
 // errNotImage is a picture or signature whose bytes are not an image.
+//
+// The type comes from the bytes, never from Content-Type or a file name, and
+// what is stored is always re-encoded by this program (photos.go,
+// squareJPEG): that is what stops an HTML or SVG payload, or a crafted webp
+// or bmp this binary cannot even decode, being kept and served back from our
+// own origin as somebody's face.
 var errNotImage = errors.New("not an image")
-
-// saveAvatar stores raw as username's picture.
-func (s *Server) saveAvatar(username string, raw []byte) error {
-	// The type comes from the bytes, never from Content-Type or a file name.
-	// This is the one check that stops an HTML or SVG payload being stored and
-	// later served back from our own origin, which would be a scripting hole
-	// dressed up as a profile picture.
-	if imageType(raw) == "" {
-		return errNotImage
-	}
-
-	// Re-encoded rather than stored as sent: it caps the dimensions, drops
-	// the metadata, and guarantees what lands on disk is an image this
-	// program produced. thumbnail returns PNG or JPEG only.
-	small, ct := thumbnail("avatar:"+username+":"+strconv.Itoa(len(raw)), raw, avatarDisplay)
-	// thumbnail re-encodes to PNG or JPEG on success, but returns the RAW bytes
-	// unchanged for a format it cannot decode. The binary has no webp or bmp
-	// decoder, yet imageType accepts both by magic bytes -- so without this
-	// check a crafted webp/bmp (valid header, arbitrary tail) would be stored
-	// un-re-encoded and served inline to every colleague, breaking the "an image
-	// this program produced" guarantee and feeding a decoder bytes we never
-	// parsed. Anything not actually re-encoded is refused.
-	if ct != "image/png" && ct != "image/jpeg" {
-		return errNotImage
-	}
-	ext := "png"
-	if ct == "image/jpeg" {
-		ext = "jpg"
-	}
-
-	if err := os.MkdirAll(s.avatarDir, 0o700); err != nil {
-		return err
-	}
-	if err := os.WriteFile(s.avatarPath(username, ext), small, 0o600); err != nil {
-		return err
-	}
-	// Recorded only once the file is on disk, so the account never claims a
-	// picture that cannot be served.
-	if err := s.guard.Users.SetAvatar(username, ext); err != nil {
-		return err
-	}
-	// A different extension from last time leaves the old file orphaned.
-	for _, other := range []string{"png", "jpg"} {
-		if other != ext {
-			_ = os.Remove(s.avatarPath(username, other))
-		}
-	}
-	return nil
-}
 
 // handleAvatarDelete removes a picture.
 func (s *Server) handleAvatarDelete(w http.ResponseWriter, r *http.Request) {
@@ -351,12 +312,22 @@ func (s *Server) handleAvatarDelete(w http.ResponseWriter, r *http.Request) {
 		writeUserError(w, err)
 		return
 	}
-	if err := s.guard.Users.SetAvatar(subject.Username, ""); err != nil {
-		writeUserError(w, err)
+	// One picture by its id (the next newest becomes current), or -- with no
+	// id, as this route always meant -- every picture.
+	s.galleryMu.Lock()
+	if id := r.URL.Query().Get("id"); id != "" {
+		err = s.galleryDelete(subject.Username, id)
+	} else {
+		err = s.galleryDeleteAll(subject.Username)
+	}
+	s.galleryMu.Unlock()
+	if errors.Is(err, errNoPhoto) {
+		writeJSONError(w, http.StatusNotFound, `{"error":"این تصویر دیگر نیست."}`)
 		return
 	}
-	for _, ext := range []string{"png", "jpg"} {
-		_ = os.Remove(s.avatarPath(subject.Username, ext))
+	if err != nil {
+		writeUserError(w, err)
+		return
 	}
 	writeJSON(w, map[string]any{"ok": true})
 }
@@ -381,6 +352,23 @@ func (s *Server) handleAvatar(w http.ResponseWriter, r *http.Request) {
 	u, err := s.guard.Users.Get(name)
 	if err != nil || u.Avatar == "" {
 		http.NotFound(w, r)
+		return
+	}
+	// One of the pictures by id (photos.go), small unless size=full; or the
+	// current one, sharp, for a profile opened full-width.
+	q := r.URL.Query()
+	if id := q.Get("id"); id != "" || q.Get("size") == "full" {
+		if id == "" {
+			s.galleryMu.Lock()
+			list, err := s.galleryList(u.Username)
+			s.galleryMu.Unlock()
+			if err != nil || len(list) == 0 {
+				http.NotFound(w, r)
+				return
+			}
+			id = list[0].ID
+		}
+		s.serveGalleryPhoto(w, r, u.Username, id, q.Get("size") != "full")
 		return
 	}
 	// The extension comes from the account record, and only two values are

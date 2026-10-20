@@ -37,6 +37,10 @@ anyone else. STUN, TURN and the group-call media server are built in.
   keys and ciphertext. See [docs/chat/SECRET_CHATS.md](docs/chat/SECRET_CHATS.md).
 
 **Accounts and security**
+- Invite-only self-registration: an administrator mints a code on the users
+  page (choosing the role, a use limit and an expiry), hands out its link, and
+  people sign themselves up at `/register`. No code, no account, so the public
+  page cannot be abused; `DOCFIND_REGISTRATION=off` turns it off entirely
 - Roles (administrator, manager, viewer) with per-account allow and deny
   overrides
 - Two-step sign-in with an authenticator app, a code by email or by SMS, and
@@ -103,6 +107,7 @@ variable with what it does; the ones you need:
 | `DOCFIND_PG_HOST`, `DOCFIND_PG_PORT`, `DOCFIND_PG_USER`, `DOCFIND_PG_PASSWORD`, `DOCFIND_PG_DATABASE`, `DOCFIND_PG_SSLMODE` | The database. The schema is created and upgraded on start. |
 | `DOCFIND_PUSH_SUBJECT` | A `mailto:` address push services can reach you at. Without it, device notifications stay off. |
 | `DOCFIND_TURN_SECRET` | Turns the built-in TURN relay on. Calls between networks that cannot reach each other need it. |
+| `DOCFIND_TURN_PEERS` | `server` when the relay is open to the internet: it then reaches only this server's own relays and group-call media server, never another host on your network. |
 | `DOCFIND_PASSKEY_RPID`, `DOCFIND_PASSKEY_ORIGINS` | The host name passkeys are bound to, and the origins they are used from. |
 
 Files the server keeps beside the accounts file (`-users`): the session
@@ -125,6 +130,25 @@ with the database.
 | `-env-file <path>`, `-env-file-wins` | Which `.env` to read, and whether it overrides the real environment. |
 | `-version` | Print the version. |
 
+## Android app
+
+`android/` is the messenger in a WebView, plus what a browser tab cannot do:
+calls that ring and messages that arrive while the app is closed, with no push
+service in between, and a call that keeps going in the background. Build it
+against your own server (JDK 17, Android SDK 34):
+
+```sh
+cd android
+echo "messenger.baseUrl=https://chat.example.com" >> local.properties
+./gradlew assembleRelease
+```
+
+Sign it with your own key (`MESSENGER_KEYSTORE_PROPS` names a
+`keystore.properties` kept outside the repository), name it
+`messenger-android-<version>-<code>.apk` and put it in the `app` folder beside
+the binary (or `DOCFIND_ANDROID_DIR`). Signed-in people then get it at
+`/app/messenger.apk`, and the app offers each newer one itself.
+
 ## Layout
 
 | Path | |
@@ -139,6 +163,7 @@ with the database.
 | `internal/webauthn` | Passkeys |
 | `internal/audit`, `internal/obs` | The audit trail, request logs and metrics |
 | `internal/netguard` | The check that keeps outbound requests off private networks |
+| `android` | The Android app |
 
 ## Development
 

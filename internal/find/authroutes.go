@@ -217,7 +217,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		// passkeys: whether the sign-in page should offer the passkey button;
 		// password_reset: the forgotten-password link (passwordreset.go).
 		writeJSON(w, map[string]any{"auth_enabled": true, "user": nil, "passkeys": s.passkeysOn(),
-			"password_reset": s.passwordResetOn()})
+			"password_reset": s.passwordResetOn(), "registration": s.registrationOn()})
 		return
 	}
 	u := auth.UserFrom(r2)
@@ -516,6 +516,11 @@ func (s *Server) handleAsset(body []byte, contentType string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Content-Type", contentType)
+		// Which build these bytes are, on the 304 too (it refreshes the
+		// browser's stored copy): the service worker keeps a file only from
+		// its own build, so a page left open across a release never mixes two
+		// releases in the copy it falls back on (sw.js).
+		h.Set("X-Docfind-Build", buildVersion)
 		if isVersionedRequest(r) {
 			// The one case where this asset's own bytes cannot go stale under
 			// the URL the browser holds: the URL names the build, so a new

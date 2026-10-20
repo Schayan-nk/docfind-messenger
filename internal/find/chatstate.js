@@ -29,13 +29,26 @@ export const photoURL = u => '/api/account/photo?u=' + encodeURIComponent(u);
 
 // facePhoto puts user's DocFind picture over an avatar's letter (which stays
 // beneath, for when the picture cannot load).
+//
+// A list redraw makes every row anew, and a picture asked for lazily and
+// decoded off the main thread showed the row's letter for a frame or two each
+// time -- a face flickering to its initial on every new message (the
+// recording of 2026-10-19). A picture shown once on this page is drawn at once
+// from then on; one still on its way hides the letter rather than flashing it.
+const faceShown = new Set();
 export function facePhoto(a, user, has) {
   if (!user) return a;
   if (has) S.photos.add(user);
   if (!S.photos.has(user)) return a;
-  const img = new Image(); img.className = 'm-av-img'; img.alt = ''; img.decoding = 'async'; img.loading = 'lazy';
+  const img = new Image(); img.className = 'm-av-img'; img.alt = '';
+  if (faceShown.has(user)) img.decoding = 'sync';
+  else {
+    img.decoding = 'async'; img.loading = 'lazy';
+    a.classList.add('m-av-wait');
+    img.addEventListener('load', () => { faceShown.add(user); a.classList.remove('m-av-wait'); }, { once: true });
+  }
   img.src = photoURL(user);
-  img.addEventListener('error', () => { img.remove(); S.photos.delete(user); }, { once: true });
+  img.addEventListener('error', () => { img.remove(); a.classList.remove('m-av-wait'); S.photos.delete(user); faceShown.delete(user); }, { once: true });
   a.prepend(img);
   return a;
 }

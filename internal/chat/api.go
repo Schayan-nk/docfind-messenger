@@ -199,9 +199,25 @@ func (a *API) People(w http.ResponseWriter, r *http.Request) {
 		Name  string `json:"name"`
 		Photo bool   `json:"photo,omitempty"`
 	}
+	// For now (the user, 2026-10-19) only an administrator sees everybody here:
+	// anyone else finds the people they already share a chat with, and someone
+	// new only by typing their whole username.
+	admin := directoryAdmin(r.Context())
+	known := map[string]bool{}
+	if !admin {
+		if peers, err := a.Svc.Store.Peers(r.Context(), me); err == nil {
+			for _, p := range peers {
+				known[p] = true
+			}
+		}
+	}
+	whole := strings.TrimPrefix(q, "@")
 	var out []row
 	for _, u := range a.Svc.users.List() {
 		if u.Disabled || u.Username == me {
+			continue
+		}
+		if !admin && !known[u.Username] && (whole == "" || whole != strings.ToLower(u.Username)) {
 			continue
 		}
 		name := u.DisplayName

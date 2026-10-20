@@ -1,6 +1,10 @@
 package find
 
-import "strings"
+import (
+	"encoding/json"
+	"sort"
+	"strings"
+)
 
 // buildVersion is the release this binary was built as, set by main.
 //
@@ -54,6 +58,52 @@ const cachePlaceholder = "docfind-shell-v6"
 // Naming the cache after the build solves both: the bytes differ every release,
 // so every release is noticed; and the cache is new every release, so the
 // activate handler drops the previous one without anybody remembering to ask.
+//
+// It also writes in the list of files the worker keeps (workerAssets), so the
+// list is always this build's own and the worker's bytes change when it does.
 func stampWorker(js []byte, version string) []byte {
-	return []byte(strings.ReplaceAll(string(js), cachePlaceholder, "docfind-shell-"+version))
+	out := strings.ReplaceAll(string(js), cachePlaceholder, "docfind-shell-"+version)
+	list, _ := json.Marshal(workerAssets())
+	return []byte(strings.Replace(out, precachePlaceholder, "const PRECACHE = "+string(list)+";", 1))
+}
+
+// precachePlaceholder is the literal in sw.js the list replaces: valid on its
+// own (an empty list keeps nothing beyond the pages), like cachePlaceholder.
+const precachePlaceholder = "const PRECACHE = [];"
+
+// sharedScripts are the scripts the pages share besides app.css and nav.js
+// (which versionedAssetPaths already names).
+var sharedScripts = []string{
+	"/push.js", "/notifycenter.js", "/datepick.js", "/glassnav.js", "/meganav.js", "/twostep.js",
+	"/passkeys.js", "/useredit.js", "/roles.js", "/invites.js", "/photoedit.js", "/photoview.js", "/setglass.css",
+}
+
+// workerAssets is every file the pages are made of -- scripts, styles,
+// fonts, icons -- which the service worker keeps at install, so a phone whose
+// network stalls still opens the application from its own copy (2026-10-19:
+// an iPhone's connections stopped getting through for six minutes, and the
+// worker, waiting on the network for files it had never kept, showed nothing).
+// Sorted, so the same build always writes the same worker.
+func workerAssets() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(p string) {
+		if !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	for _, p := range versionedAssetPaths {
+		add(p)
+	}
+	for _, p := range sharedScripts {
+		add(p)
+	}
+	for _, m := range []map[string][]byte{chatScripts, chatStyles, chatExtraScripts} {
+		for p := range m {
+			add(p)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

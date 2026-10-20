@@ -66,6 +66,12 @@ type Config struct {
 	// relays: the group calls' media server, which relayed browsers must
 	// reach too.
 	OwnPorts []int
+	// ServerOnly (DOCFIND_TURN_PEERS=server) lets a relay reach nothing but
+	// this server's own live relays and OwnPorts: for a TURN server open to
+	// the internet (fence.go, the security review's F4). Two relayed browsers
+	// still meet relay to relay, and the group calls' media server is still
+	// reached, while no other host, on the office network or outside, is.
+	ServerOnly bool
 }
 
 // FromEnv reads the settings; ok is false when DOCFIND_TURN_SECRET is unset.
@@ -102,6 +108,13 @@ func FromEnv() (cfg Config, ok bool, err error) {
 		if cfg.RelayIP = net.ParseIP(ip).To4(); cfg.RelayIP == nil {
 			return cfg, false, fmt.Errorf("DOCFIND_TURN_RELAY_IP %q is not an IPv4 address", ip)
 		}
+	}
+	switch p := strings.ToLower(strings.TrimSpace(os.Getenv("DOCFIND_TURN_PEERS"))); p {
+	case "", "any":
+	case "server":
+		cfg.ServerOnly = true
+	default:
+		return cfg, false, fmt.Errorf("DOCFIND_TURN_PEERS %q is neither any nor server", p)
 	}
 	return cfg, true, nil
 }
@@ -165,11 +178,11 @@ func Start(cfg Config, active func(user string, session int) bool, logf func(str
 	for _, p := range cfg.OwnPorts {
 		s.ports.set(p, true) // always open to relays, like a live relay
 	}
-	permit := func(_ net.Addr, peer net.IP) bool { return permitted(nil, peer) && !bcast[peer.String()] }
+	permit := peerPermit(own, bcast, cfg.ServerOnly)
 	relay := func() turn.RelayAddressGenerator {
 		return &guardedRelay{RelayAddressGeneratorPortRange: turn.RelayAddressGeneratorPortRange{
 			RelayAddress: cfg.RelayIP, Address: "0.0.0.0", MinPort: uint16(cfg.MinPort), MaxPort: uint16(cfg.MaxPort),
-		}, own: own, bcast: bcast, ports: s.ports}
+		}, own: own, bcast: bcast, ports: s.ports, serverOnly: cfg.ServerOnly}
 	}
 	host := cfg.Listen
 	if host == "" {

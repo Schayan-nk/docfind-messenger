@@ -79,7 +79,13 @@ type Notice struct {
 
 // noticeText is the words of a message as a notification may show them.
 func noticeText(m *Message) string {
-	kind := map[string]string{"photo": "عکس", "video": "ویدیو", "round": "پیام ویدیویی", "voice": "پیام صوتی", "file": "فایل", "doc": "سند"}[m.Kind]
+	// The same icons as the chat list, so a notification and the list read
+	// alike; a poll or sticker with no words no longer comes as an empty one.
+	kind := map[string]string{
+		"photo": "📷 عکس", "video": "🎥 ویدیو", "round": "📹 پیام ویدیویی", "voice": "🎤 پیام صوتی",
+		"file": "📎 فایل", "doc": "📄 سند", "poll": "📊 نظرسنجی", "location": "📍 موقعیت",
+		"sticker": "برچسب", "gif": "🎞️ گیف",
+	}[m.Kind]
 	var ents []Entity
 	_ = json.Unmarshal(m.Entities, &ents)
 	text := strings.Join(strings.Fields(m.Text), " ")
@@ -89,7 +95,7 @@ func noticeText(m *Message) string {
 			break
 		}
 	}
-	if kind == "file" && m.Media != nil && m.Media.Name != "" {
+	if m.Kind == "file" && m.Media != nil && m.Media.Name != "" {
 		kind += ": " + m.Media.Name
 	}
 	switch {

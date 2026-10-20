@@ -233,6 +233,7 @@ const SV = { // [the third person, «شما»]
   create: (p, t) => [`${kindName(t)} «${p.title}» را ساخت`, `${kindName(t)} «${p.title}» را ساختید`],
   add: p => [`${names(p)} را افزود`, `${names(p)} را افزودید`],
   join: () => ['با پیوند دعوت پیوست', 'با پیوند دعوت پیوستید'],
+  signup: () => ['عضو پیام‌رسان شد', 'عضو پیام‌رسان شدید'], // a new account, told to the invite's maker
   leave: () => ['بیرون رفت', 'بیرون رفتید'],
   remove: p => [`${names(p)} را بیرون کرد`, `${names(p)} را بیرون کردید`],
   owner: p => [`مالکیت را به ${names(p)} سپرد`, `مالکیت را به ${names(p)} سپردید`],
@@ -244,7 +245,10 @@ export function serviceText(m, chat) {
   const p = (typeof m.service === 'string' ? JSON.parse(m.service || '{}') : m.service) || {};
   const f = SV[p.action]; if (!f) return '';
   const mine = m.from === S.me;
-  return (mine ? 'شما ' : (m.from_name || nameOf(m.from)) + ' ') + f(p, chat && chat.type)[mine ? 1 : 0];
+  // A sign-up line carries the name the account was made with: in a private
+  // chat there is no sender name and no member list to look the person up in.
+  const who = m.from_name || (p.action === 'signup' && p.names && p.names[0]) || nameOf(m.from);
+  return (mine ? 'شما ' : who + ' ') + f(p, chat && chat.type)[mine ? 1 : 0];
 }
 hooks.serviceText = serviceText;
 hooks.serviceLine = (m, chat) => {

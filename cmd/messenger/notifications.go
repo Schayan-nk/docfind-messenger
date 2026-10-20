@@ -96,6 +96,12 @@ func startNotifications(app *find.Server, db *pgstore.DB, stateDir string) {
 		},
 	}
 	app.UseNotifications(store, d, keys.PublicB64(), subject, sender.AllowedEndpoint, webpush.ValidateKeys)
+	// The Android app's APK: DOCFIND_ANDROID_DIR, or "app" beside the program.
+	apkDir := strings.TrimSpace(os.Getenv("DOCFIND_ANDROID_DIR"))
+	if exe, err := os.Executable(); apkDir == "" && err == nil {
+		apkDir = exe[:strings.LastIndexAny(exe, `\/`)+1] + "app"
+	}
+	app.UseAndroidApp(apkDir)
 
 	// NOT STARTED HERE: main calls startPushWorkers once everything is in
 	// place, just before serving, so no goroutine reads the server while it

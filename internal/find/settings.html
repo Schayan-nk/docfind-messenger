@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#142F40">
+<meta name="theme-color" content="#000000">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -111,9 +111,11 @@
   .role-row { display: flex; gap: var(--s2); align-items: center; padding: 3px 0; }
   .chip-sm { font-size: .75em; padding: 0 6px; }
 </style>
+<link rel="stylesheet" href="/chatglass.css">
+<link rel="stylesheet" href="/setglass.css">
 </head>
 
-<body>
+<body class="setg">
 <header class="appbar">
   <!-- Mark and visible title removed from the header; the heading stays,
        said rather than shown -- see .sr-only. -->
@@ -129,6 +131,7 @@
 <script src="/nav.js"></script>
 <script src="/twostep.js"></script>
 <script src="/roles.js"></script>
+<script src="/invites.js"></script>
 <script src="/passkeys.js"></script>
 <script src="/datepick.js"></script>
 <script src="/useredit.js"></script>
@@ -211,6 +214,7 @@
           <span id="acctRole" class="hint"></span>
           <div class="acct-acts">
             <button type="button" class="btn btn-sm" id="avaPick2">انتخاب تصویر</button>
+            <button type="button" class="btn btn-sm" id="avaEditBtn" hidden>ویرایش تصویر</button>
             <button type="button" class="btn btn-sm btn-ghost" id="avaClear">حذف تصویر</button>
           </div>
           <p class="hint" style="margin:6px 0 0">
@@ -398,6 +402,29 @@
       <p class="hint" id="roleState"></p>
       <div id="roleBody" class="perm-body" style="max-height:none"></div>
       <div class="msg notice hidden" id="roleMsg" role="status"></div>
+    </div>
+  </section>
+
+  <!-- Registration invite codes (invites.js, registerroutes.go): mint a code,
+       hand out its link, and revoke the ones outstanding. The card hides
+       itself where registration is off. -->
+  <section class="card" data-sec="users" id="invitesCard" hidden>
+    <h2 class="card-head">کدهای دعوت</h2>
+    <div class="card-body">
+      <p class="hint" style="margin-top:0">برای ساختن حساب تازه یک کد بسازید و نشانی آن را به کاربر بدهید؛ بدون کد کسی نمی‌تواند ثبت‌نام کند. «چند بار» برابر ۰ یعنی بی‌شمار، و «اعتبار» برابر ۰ یعنی بدون انقضا.</p>
+      <div style="display:flex;gap:var(--s2);align-items:end;flex-wrap:wrap">
+        <div class="field" style="margin:0"><label class="label" for="invRole">نقش</label>
+          <select class="select" id="invRole" style="width:auto"><option value="viewer">بیننده</option><option value="manager">مدیر</option></select></div>
+        <div class="field" style="margin:0"><label class="label" for="invUses">چند بار</label>
+          <input class="input" id="invUses" type="number" min="0" value="1" inputmode="numeric" style="width:6em"></div>
+        <div class="field" style="margin:0"><label class="label" for="invDays">اعتبار (روز)</label>
+          <input class="input" id="invDays" type="number" min="0" value="0" inputmode="numeric" style="width:6em"></div>
+        <div class="field" style="margin:0;flex:1;min-width:140px"><label class="label" for="invNote">یادداشت</label>
+          <input class="input" id="invNote" placeholder="برای چه کسی" maxlength="120"></div>
+        <button type="button" class="btn btn-primary btn-sm" id="invMint">ساختن کد</button>
+      </div>
+      <div class="msg notice hidden" id="invMsg" role="status" style="margin-top:var(--s2)"></div>
+      <div id="invList" class="dep-list" style="margin-top:var(--s3)"></div>
     </div>
   </section>
 
@@ -765,9 +792,16 @@ function showAvatar(has, who) {
   }
   show(img, has);
   show(ph, !has);
+  const edit = $('avaEditBtn'); if (edit) show(edit, has);
 }
 
 async function uploadAvatar(file) {
+  if (!file) return;
+  // Framed by its owner first, every time (photoedit.js): a square shown as a
+  // circle, 512 pixels, a JPEG of a few dozen kilobytes. Giving up there
+  // leaves the picture as it was.
+  try { file = await (await import('/photoedit.js')).editPhoto(file, { shape: 'circle', size: 1024 }); }
+  catch { say($('avaMsg'), 'این تصویر باز نشد؛ یک عکس JPG یا PNG انتخاب کنید.'); return; }
   if (!file) return;
   // Checked here as well as on the server so somebody who picked a 20 MB
   // photograph is told immediately rather than after the upload.
@@ -790,12 +824,119 @@ async function uploadAvatar(file) {
   showAvatar(true, me.username);
 }
 
+// The current picture goes; an earlier one, if any, takes its place.
 async function clearAvatar() {
-  const r = await api('/api/account/photo', { method: 'DELETE' });
+  const l = await api('/api/account/photos');
+  const photos = l.ok ? ((await l.json().catch(() => ({}))).photos || []) : [];
+  const r = await api('/api/account/photo' + (photos.length ? '?id=' + photos[0].id : ''), { method: 'DELETE' });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) { say($('avaMsg'), d.error || 'حذف تصویر انجام نشد.'); return; }
-  say($('avaMsg'), 'تصویر حذف شد.', true);
-  showAvatar(false, me.username);
+  const left = Math.max(0, photos.length - 1);
+  say($('avaMsg'), left ? 'تصویر حذف شد؛ تصویر پیشین جای آن آمد.' : 'تصویر حذف شد.', true);
+  me.has_avatar = left > 0;
+  showAvatar(left > 0, me.username);
+}
+
+// ------------------------------------------------------------ the home screen
+//
+// /settings itself is Telegram's settings (the user's screenshots,
+// 2026-10-19): the account at the top -- picture, name, phone and @name --
+// then rows in groups, each with its coloured square, each opening one
+// section; a section is a screen of its own with a way back here.
+const SV = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+const HI = {
+  person: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  saved: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  devices: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M6 18h6"/><rect x="17" y="8" width="5" height="11" rx="1.5"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  look: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  chev: '<path d="M15 6l-6 6 6 6"/>',
+  back: '<path d="M9 6l6 6-6 6"/>',
+};
+function mk(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function stRow({ icon, color, label, value, href, run, cls }) {
+  const r = mk(href ? 'a' : 'button', 'st-row' + (cls ? ' ' + cls : ''));
+  if (href) r.href = href; else { r.type = 'button'; r.addEventListener('click', run); }
+  if (icon) { const i = mk('span', 'st-ic'); if (color) i.style.setProperty('--c', color); i.innerHTML = SV(icon); r.appendChild(i); }
+  r.appendChild(mk('span', 'st-label', label));
+  if (value != null) { r.val = mk('span', 'st-val', value); r.appendChild(r.val); }
+  if (!cls) { const c = mk('span'); c.innerHTML = SV(HI.chev); c.firstChild.setAttribute('class', 'st-chev'); r.appendChild(c.firstChild); }
+  return r;
+}
+const stGroup = rows => { const g = mk('div', 'st-group'); g.append(...rows.filter(Boolean)); return g; };
+function paintFace(btn) {
+  btn.textContent = '';
+  if (me.has_avatar) { const i = mk('img'); i.alt = ''; i.src = '/api/account/photo?u=' + encodeURIComponent(me.username) + '&v=' + Date.now(); btn.appendChild(i); }
+  else btn.textContent = [...(me.display_name || me.username || '؟').trim()][0] || '؟';
+}
+async function homeUpload(file, note, repaint) {
+  try { file = await (await import('/photoedit.js')).editPhoto(file, { shape: 'circle', size: 1024 }); }
+  catch { note('این تصویر باز نشد؛ یک عکس JPG یا PNG انتخاب کنید.'); return; }
+  if (!file) return;
+  if (file.size > 4 * 1024 * 1024) { note('حجم تصویر بیش از ۴ مگابایت است.'); return; }
+  note('در حال ارسال…');
+  const r = await api('/api/account/photo', { method: 'POST', headers: { 'Content-Type': file.type || 'image/jpeg' }, body: file });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { note(d.error || 'ارسال تصویر انجام نشد.'); return; }
+  me.has_avatar = true; repaint(); note('تصویر تازه گذاشته شد.');
+  setTimeout(() => note(''), 3500);
+}
+function drawHome(list) {
+  const main = $('main'); main.innerHTML = '';
+  const has = id => list.some(s => s.id === id);
+  const name = me.display_name || me.username;
+  const bar = mk('div', 'st-bar');
+  const title = mk('h2', 'st-title', name); title.dir = 'auto';
+  const edit = mk('a', 'st-btn st-end', 'ویرایش'); edit.href = '/settings/account';
+  bar.append(title, edit);
+  const head = mk('div', 'st-head');
+  const face = mk('button', 'st-ava'); face.type = 'button'; face.setAttribute('aria-label', 'تصویرهای من'); paintFace(face);
+  const nm = mk('h1', 'st-name', name); nm.dir = 'auto';
+  const sub = mk('div', 'st-sub');
+  if (me.phone) sub.append(mk('bdi', '', me.phone), ' • ');
+  sub.appendChild(mk('bdi', '', '@' + me.username));
+  head.append(face, nm, sub);
+  const file = mk('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg,image/gif,image/webp'; file.hidden = true;
+  const note = mk('p', 'st-note'); note.setAttribute('role', 'status'); note.hidden = true;
+  const tell = t => { note.textContent = t || ''; note.hidden = !t; };
+  const pick = () => file.click();
+  file.addEventListener('change', () => { const f = file.files && file.files[0]; file.value = ''; if (f) homeUpload(f, tell, () => paintFace(face)); });
+  face.addEventListener('click', () => me.has_avatar
+    ? import('/photoview.js').then(m => m.viewPhotos({ user: me.username, name, own: true, onChange: l => { me.has_avatar = l.length > 0; paintFace(face); } }))
+    : pick());
+  const devices = stRow({ icon: HI.devices, color: '#ff9f0a', label: 'دستگاه‌ها', value: '', href: '/settings/security' });
+  api('/api/account/sessions').then(r => r.ok ? r.json() : null)
+    .then(d => { if (d && d.sessions) devices.val.textContent = faNum.format(d.sessions.length); }).catch(() => {});
+  main.append(bar, head,
+    stGroup([stRow({ icon: HI.camera, label: 'افزودن تصویر نمایه', run: pick, cls: 'pill' })]), note,
+    stGroup([stRow({ icon: HI.person, color: '#ff453a', label: 'حساب من', href: '/settings/account' })]),
+    stGroup([
+      stRow({ icon: HI.saved, color: '#0a84ff', label: 'پیام‌های ذخیره‌شده', href: '/messages#saved' }),
+      stRow({ icon: HI.phone, color: '#30d158', label: 'تماس‌های اخیر', href: '/messages#calls' }),
+      devices,
+      stRow({ icon: HI.folder, color: '#40c8e0', label: 'پوشه‌های گفت‌وگو', href: '/messages#folders' }),
+    ]),
+    stGroup([
+      has('notifications') && stRow({ icon: HI.bell, color: '#ff453a', label: 'اعلان‌ها و صداها', href: '/settings/notifications' }),
+      stRow({ icon: HI.lock, color: '#8e8e93', label: 'حریم خصوصی و امنیت', href: '/settings/security' }),
+      stRow({ icon: HI.look, color: '#0a84ff', label: 'ظاهر', href: '/settings/appearance' }),
+    ]),
+    ...(has('users') ? [stGroup([stRow({ icon: HI.users, color: '#bf5af2', label: 'کاربران و دسترسی‌ها', href: '/settings/users' })])] : []),
+    stGroup([stRow({ label: 'خروج از حساب', run: () => $('signout').click(), cls: 'danger' })]), file);
+  // The name moves into the bar once the account has scrolled under it.
+  if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => bar.classList.toggle('on', !e.isIntersecting), { rootMargin: '-64px 0px 0px 0px' }).observe(nm);
+}
+// subBar is a section's own bar: the way back to the list, and its name.
+function subBar(s) {
+  const bar = mk('div', 'st-bar sub');
+  const back = mk('a', 'st-btn st-start'); back.href = '/settings'; back.innerHTML = SV(HI.back); back.appendChild(mk('span', '', 'تنظیمات'));
+  bar.append(back, mk('h2', 'st-title', s.name));
+  return bar;
 }
 
 // Preferences are applied as the control moves and saved a moment later, so
@@ -876,6 +1017,13 @@ function wireAccount() {
     uploadAvatar(f);
   });
   $('avaClear').addEventListener('click', clearAvatar);
+  // Re-framing the picture already there: it goes through the same editor.
+  $('avaEditBtn').addEventListener('click', async () => {
+    const r = await fetch('/api/account/photo?u=' + encodeURIComponent(me.username) + '&v=' + Date.now(), { credentials: 'same-origin' });
+    if (!r.ok) { say($('avaMsg'), 'تصویر فعلی خوانده نشد.'); return; }
+    const b = await r.blob();
+    uploadAvatar(new File([b], 'avatar', { type: b.type || 'image/jpeg' }));
+  });
 
   $('fsRange').addEventListener('input', onPrefChange);
   $('density').addEventListener('change', onPrefChange);
@@ -1049,11 +1197,17 @@ async function init() {
   // things that are their own business, their picture, their type size and
   // their password, had nowhere to live.
   const list = settingsFor(me);
+  // /settings itself is the home screen; each section has its own address.
+  if (me && location.pathname.replace(/\/+$/, '') === '/settings' && !LEGACY_ANCHORS[location.hash.replace('#', '')]) {
+    document.title = 'تنظیمات | پیام‌رسان';
+    drawHome(list);
+    return;
+  }
   const cur = currentSetting(list);
   document.title = cur.name + ' | تنظیمات';
   drawSettingsNav(list, cur);
   $('main').innerHTML = '';
-  $('main').appendChild(settingHead(cur));
+  $('main').appendChild(subBar(cur));
   if (!me) return;
   if (cur.id === 'account' || cur.id === 'appearance' || cur.id === 'security') {
     // One template holds the three: account, display, and the four
@@ -1077,6 +1231,7 @@ async function init() {
   $('userPrev').addEventListener('click', () => { userPage--; renderUsers(); });
   $('userNext').addEventListener('click', () => { userPage++; renderUsers(); });
   if (window.DocfindRoles) window.DocfindRoles.mount($('rolesCard'));
+  if (window.DocfindInvites) window.DocfindInvites.mount($('invitesCard'));
   await loadUsers();
 
   $('addBtn').addEventListener('click', async () => {

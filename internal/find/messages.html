@@ -309,6 +309,9 @@
   .m-send-size { font-size: 11px; color: var(--fg-muted); }
   .m-send-x { all: unset; cursor: pointer; position: absolute; top: 4px; inset-inline-end: 4px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: rgb(0 0 0 / .55); color: #fff; }
   .m-send-x svg { width: 14px; height: 14px; }
+  .m-send-ed { all: unset; cursor: pointer; position: absolute; top: 4px; inset-inline-start: 4px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: rgb(0 0 0 / .55); color: #fff; }
+  .m-send-ed svg { width: 14px; height: 14px; }
+  .m-send-x:focus-visible, .m-send-ed:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
   .m-send-caption { width: 100%; box-sizing: border-box; resize: none; }
   .m-doc-row .m-doc-icon { width: 40px; height: 40px; }
   .m-drop { position: absolute; inset: 12px; z-index: 8; display: grid; place-items: center; border: 2px dashed var(--accent); border-radius: 16px; background: rgb(15 36 51 / .85); color: var(--fg); font-size: 15px; opacity: 0; pointer-events: none; transition: opacity var(--dur-fast) var(--ease-out); }
@@ -339,6 +342,33 @@
   .m-rec-round { position: absolute; inset: 0; margin: auto; width: min(300px, 70vw); height: min(300px, 70vw); border-radius: 50%; overflow: hidden; z-index: 9; box-shadow: var(--shadow-lg); }
   .m-rec-round video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
 
+  /* The page itself never scrolls or bounces: only the list and the messages
+     do. A page that could let a fling run past a list's end, and iPhone
+     Safari then slid its bars and resized everything in mid-scroll. */
+  html:has(> body.msgr), body.msgr { overflow: hidden; overscroll-behavior: none; }
+  /* Touch screens: a long press belongs to the app (hold to record, the
+     message menu), not to iOS text selection, which otherwise grabs the
+     nearest words -- the bubble above the record button -- with its loupe
+     and handles. Typing keeps selection; a message is copied from its menu. */
+  @media (hover: none) and (pointer: coarse) {
+    body.msgr { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    body.msgr input, body.msgr textarea, body.msgr [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+  }
+  .m-send { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  /* The list's notification line (chatnotify.js): how to get notifications here. */
+  .m-pushhint { margin: 8px 12px 4px; padding: 12px 14px; border-radius: 14px; background: color-mix(in oklab, var(--accent) 16%, var(--surface-2)); display: grid; gap: 10px; }
+  .m-pushhint-head { display: flex; align-items: flex-start; gap: 10px; }
+  .m-pushhint-ic { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; }
+  .m-pushhint-ic svg { width: 18px; height: 18px; }
+  .m-pushhint-text { flex: 1; display: grid; gap: 2px; font-size: 13.5px; line-height: 1.6; color: var(--fg-muted); }
+  .m-pushhint-text b { color: var(--fg); font-size: 15px; }
+  .m-pushhint-later { all: unset; cursor: pointer; font-size: 13px; color: var(--fg-muted); padding: 4px 8px; border-radius: 8px; }
+  .m-pushhint-later:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .m-pushhint-steps { margin: 0; padding-inline-start: 22px; display: grid; gap: 6px; font-size: 13.5px; line-height: 1.7; }
+  .m-pushhint-share { display: inline-grid; vertical-align: middle; color: var(--accent); }
+  .m-pushhint-share svg { width: 18px; height: 18px; }
+  .m-pushhint > .btn { justify-self: start; }
+
   @media (max-width: 900px) {
     .msgr main { grid-template-columns: minmax(0, 1fr); position: relative; }
     body.msgr.has-glassnav { padding-bottom: 0; }
@@ -364,6 +394,7 @@
     .m-chat, .m-list { transition: opacity 100ms linear !important; }
   }
 </style>
+<link rel="stylesheet" href="/chatglass.css">
 </head>
 <body class="msgr" data-no-chat="1">
 <header class="appbar"><h1 class="sr-only">پیام‌ها</h1><span class="spacer"></span></header>
@@ -382,10 +413,13 @@
   </nav>
   <section class="m-list" aria-label="گفت‌وگوها">
     <div class="m-list-head">
+      <h2 class="m-list-title">گفت‌وگوها</h2>
+      <div class="m-list-acts">
+        <button class="m-icon-btn" type="button" id="m-new-btn" aria-label="گفت‌وگوی تازه" title="گفت‌وگوی تازه">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
+      </div>
       <input class="input" id="m-filter" type="search" placeholder="جستجو در گفت‌وگوها" aria-label="جستجو در گفت‌وگوها" autocomplete="off">
-      <button class="m-icon-btn" type="button" id="m-new-btn" aria-label="گفت‌وگوی تازه" title="گفت‌وگوی تازه">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-      </button>
     </div>
     <div class="m-rows" id="m-rows" role="list" aria-live="polite"><div class="m-skel"></div><div class="m-skel"></div><div class="m-skel"></div></div>
     <div class="m-conn" id="m-conn" role="status" aria-live="polite"><span class="m-spin" aria-hidden="true"></span><span id="m-conn-text">در حال اتصال…</span></div>
@@ -400,7 +434,7 @@
 <div class="m-new" id="m-new" hidden role="dialog" aria-modal="true" aria-labelledby="m-new-title">
   <div class="m-new-card">
     <h2 id="m-new-title" style="margin:0;font-size:1.1rem">گفت‌وگوی تازه</h2>
-    <input class="input" id="m-people-q" type="search" placeholder="نام همکار" aria-label="نام همکار" autocomplete="off">
+    <input class="input" id="m-people-q" type="search" placeholder="نام یا نام کاربری" aria-label="نام یا نام کاربری" autocomplete="off">
     <div class="m-new-list" id="m-people" role="list"></div>
   </div>
 </div>

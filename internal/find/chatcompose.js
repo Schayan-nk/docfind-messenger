@@ -31,6 +31,10 @@ export function composer(chat) {
     import('/chatrec.js').then(r => r.begin(e, btn, chat, recMode, setMode)).catch(() => toast('ضبط در این مرورگر ممکن نیست.'));
   });
   btn.addEventListener('click', e => { if (!ta.value.trim() && S.draft.mode !== 'edit') e.preventDefault(); });
+  // iPhone starts its text selection from the touch itself, which the
+  // pointerdown above cannot stop; in record mode the touch is ours. With
+  // words in the bar it is left alone, so a tap still sends.
+  btn.addEventListener('touchstart', e => { if (!ta.value.trim() && S.draft.mode !== 'edit') e.preventDefault(); }, { passive: false });
   const clip = el('button', 'm-icon-btn m-attach'); clip.type = 'button'; clip.setAttribute('aria-label', 'پیوست'); clip.title = 'پیوست';
   clip.innerHTML = svg('<path d="M21 12.5l-8.5 8.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/>');
   clip.addEventListener('click', () => hooks.openAttach && hooks.openAttach(chat));
@@ -295,4 +299,17 @@ export function paintFoot() {
   }
 }
 hooks.paintFoot = paintFoot;
+
+// A tap above the message bar puts the keyboard and the sticker panel away,
+// as every messenger does: on the messages, on the header, anywhere in the
+// open chat but the bar itself and what it opened. A menu or dialog of its
+// own (a message's menu, the photo viewer) is left to manage its taps.
+document.addEventListener('pointerdown', e => {
+  const t = e.target, foot = document.querySelector('#m-chat .m-foot');
+  if (!foot || !(t instanceof Element) || foot.contains(t) || !t.closest('#m-chat')) return;
+  if (t.closest('.m-ctx, .m-pop, .m-sheet, .m-viewer, .pe, [role="dialog"]')) return;
+  const panel = foot.querySelector('.x-panel:not([hidden])'); if (panel) panel.hidden = true;
+  const ta = document.getElementById('m-input');
+  if (ta && document.activeElement === ta) ta.blur();
+}, true);
 export { findMsg };

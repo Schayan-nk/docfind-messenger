@@ -83,7 +83,7 @@ function translate(m) {
 }
 
 // ------------------------------------------------------------ chat list
-const LABEL = { poll: 'نظرسنجی', location: 'موقعیت', sticker: 'برچسب', gif: 'گیف' };
+const LABEL = { poll: '📊 نظرسنجی', location: '📍 موقعیت', sticker: 'برچسب', gif: '🎞️ گیف' }; // a sticker leads with its own emoji
 const baseRow = hooks.decorRow;
 hooks.decorRow = (chat, row) => {
   if (baseRow) baseRow(chat, row);

@@ -158,6 +158,11 @@
   <p class="hidden" id="backRow" style="margin:var(--s4) 0 0;text-align:center">
     <button type="button" class="linkish" id="backToSignIn">بازگشت به ورود</button>
   </p>
+  <!-- Shown only where the server takes sign-ups (registration on /api/me). -->
+  <p class="hidden" id="registerRow" style="margin:var(--s4) 0 0;text-align:center">
+    <span class="sub" style="margin:0">کد دعوت دارید؟</span>
+    <a class="linkish" href="/register">حساب بسازید</a>
+  </p>
   <div class="notice notice-bad hidden" id="msg" role="alert" style="margin-top:var(--s4)"></div>
   <div class="hint hidden" id="firstRun" style="margin-top:var(--s5);text-align:center">
     هنوز هیچ حسابی ساخته نشده است. نخستین مدیر ارشد را روی سرور بسازید:<br>
@@ -231,13 +236,16 @@ async function init() {
       $('passkey').classList.remove('hidden');
     }
     resetOffered = !!me.password_reset;
+    registrationOffered = !!me.registration;
     $('forgotRow').classList.toggle('hidden', !resetOffered);
+    $('registerRow').classList.toggle('hidden', !registrationOffered);
   } catch (e) {
     // A failed probe should not block a sign-in attempt.
   }
 }
 let passkeyOffered = false;
 let resetOffered = false;
+let registrationOffered = false;
 
 // A forgotten password (passwordreset.go): stage 1 asks for a code by
 // username, stage 2 sends the code with the new password; 0 is signing in.
@@ -257,6 +265,7 @@ function resetStep(stage) {
   $('newPassword').required = $('newPassword2').required = stage === 2;
   $('passkey').classList.toggle('hidden', on || !passkeyOffered);
   $('forgotRow').classList.toggle('hidden', on || !resetOffered);
+  $('registerRow').classList.toggle('hidden', on || !registrationOffered);
   $('backRow').classList.toggle('hidden', !on);
   $('sub').textContent = stage === 1
     ? 'نام کاربری‌تان را بنویسید؛ کدی به شمارهٔ همراه ثبت‌شده در حسابتان پیامک می‌شود.'

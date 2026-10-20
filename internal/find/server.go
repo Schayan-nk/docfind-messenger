@@ -28,6 +28,12 @@ var faviconICO []byte
 //go:embed login.html
 var loginHTML []byte
 
+// The invite-only registration page (registerroutes.go). Served like the
+// sign-in page: unauthenticated, carrying no data of its own.
+//
+//go:embed register.html
+var registerHTML []byte
+
 // The page the service worker serves when a navigation cannot reach us.
 //
 // Served from here as well as cached, so that the worker has something to
@@ -44,6 +50,28 @@ var settingsHTML []byte
 //
 //go:embed roles.js
 var rolesJS []byte
+
+// invitesJS is the registration-invites card on the users page
+// (registerroutes.go).
+//
+//go:embed invites.js
+var invitesJS []byte
+
+// photoeditJS crops, zooms and turns a picture: required for a profile
+// picture (settings, the users list), offered for a photo about to be sent.
+//
+//go:embed photoedit.js
+var photoeditJS []byte
+
+// photoviewJS is the full-screen viewer of somebody's pictures (photos.go).
+//
+//go:embed photoview.js
+var photoviewJS []byte
+
+// setglassCSS is the settings page in the messenger's iPhone look.
+//
+//go:embed setglass.css
+var setglassCSS []byte
 
 // Installable-app assets. Without a manifest and an apple-touch-icon, iOS
 // Safari's "Add to Home Screen" produces a bookmark with a screenshot for an
@@ -209,6 +237,9 @@ type Server struct {
 	// access model. It is set once accounts are configured, which is what
 	// makes the server safe to expose beyond this machine.
 	guard *auth.Guard
+	// invites is the registration codes (registerroutes.go); nil turns
+	// self-registration off, and /register then answers 404.
+	invites *auth.Invites
 	// The messenger (chatroutes.go); nil until UseChat.
 	chat    *chat.Service
 	chatAPI *chat.API
@@ -230,6 +261,11 @@ type Server struct {
 	// avatarDir holds the profile pictures, beside the accounts file. Empty
 	// when accounts are off, in which case the picture routes answer 404.
 	avatarDir string
+	// galleryMu serialises changes to anybody's pictures (photos.go): two
+	// uploads at once must not both decide which one is current.
+	galleryMu sync.Mutex
+	// android is the Android app's APK on offer (androidapp.go).
+	android androidApp
 	// secPolicyStore keeps the sign-in policy (securitypolicy.go); nil leaves
 	// the default in force and the security centre's card read-only.
 	secPolicyMu    sync.Mutex
@@ -345,6 +381,10 @@ func (s *Server) registerPages(mux *http.ServeMux) {
 	mux.HandleFunc("GET /vendor/thinking-orbs.js", s.handleAsset(thinkingOrbsJS, "text/javascript; charset=utf-8"))
 	mux.HandleFunc("GET /useredit.js", s.handleAsset(userEditJS, "text/javascript; charset=utf-8"))
 	mux.HandleFunc("GET /roles.js", s.handleAsset(rolesJS, "text/javascript; charset=utf-8"))
+	mux.HandleFunc("GET /invites.js", s.handleAsset(invitesJS, "text/javascript; charset=utf-8"))
+	mux.HandleFunc("GET /photoedit.js", s.handleAsset(photoeditJS, "text/javascript; charset=utf-8"))
+	mux.HandleFunc("GET /photoview.js", s.handleAsset(photoviewJS, "text/javascript; charset=utf-8"))
+	mux.HandleFunc("GET /setglass.css", s.handleAsset(setglassCSS, "text/css; charset=utf-8"))
 	// Third-party assets referenced by path: the icon sprite and the Lottie
 	// runtime. Unauthenticated: library code and chrome, carrying nothing the
 	// token protects.
@@ -354,6 +394,16 @@ func (s *Server) registerPages(mux *http.ServeMux) {
 	// APIs. signedInPage redirects a signed-out reader to sign in first
 	// (pagegate.go); the sign-in page itself is the opposite.
 	mux.HandleFunc("GET /login", s.signedOutPage(s.handlePage(injectAssets(loginHTML))))
+	// The registration page, invite-only (registerroutes.go). Like /login it
+	// turns a signed-in reader away; unlike it, it 404s when registration is
+	// off, so the page never appears on a server that does not take sign-ups.
+	mux.HandleFunc("GET /register", s.signedOutPage(func(w http.ResponseWriter, r *http.Request) {
+		if !s.registrationOn() {
+			writeNotFound(w, r)
+			return
+		}
+		s.handlePage(injectAssets(registerHTML))(w, r)
+	}))
 	// Unauthenticated on purpose, like /login: it carries no data, and the
 	// moment it is needed there is no server to ask about a session anyway.
 	mux.HandleFunc("GET /offline", s.handlePage(offlineHTML))
@@ -395,6 +445,10 @@ func (s *Server) registerSignInRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/login/reset", s.mutating(s.handleResetPassword))
 	mux.HandleFunc("POST /api/logout", s.mutating(s.handleLogout))
 	mux.HandleFunc("POST /api/first-admin", s.mutating(s.handleFirstAdmin))
+	// Invite-only self-registration (registerroutes.go). Open like /api/login:
+	// the invite code is the credential, and the handler 404s when
+	// registration is off.
+	mux.HandleFunc("POST /api/register", s.mutating(s.handleRegister))
 }
 
 // registerAccountRoutes is everything that exists only with accounts:
@@ -408,6 +462,13 @@ func (s *Server) registerAccountRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("POST /api/users/password", s.mutating(s.requirePermission(auth.ActionManageUsers, s.handleSetPassword)))
 		mux.HandleFunc("PUT /api/users/phone", s.mutating(s.requirePermission(auth.ActionManageUsers, s.handleSetUserPhone)))
 		mux.HandleFunc("DELETE /api/users", s.mutating(s.requirePermission(auth.ActionManageUsers, s.handleDeleteUser)))
+
+		// Registration invite codes (registerroutes.go): minting, listing and
+		// revoking. Administrators only, the same gate as the accounts they
+		// create.
+		mux.HandleFunc("GET /api/admin/invites", s.requirePermission(auth.ActionManageUsers, s.handleListInvites))
+		mux.HandleFunc("POST /api/admin/invites", s.mutating(s.requirePermission(auth.ActionManageUsers, s.handleMintInvite)))
+		mux.HandleFunc("DELETE /api/admin/invites", s.mutating(s.requirePermission(auth.ActionManageUsers, s.handleRevokeInvite)))
 
 		// A person's own account. Every one of these resolves who it is
 		// acting on from the caller's token, never from the request, so
@@ -458,6 +519,14 @@ func (s *Server) registerAccountRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/account/photo", s.guard.RequireAuth(s.handleAvatar))
 		mux.HandleFunc("POST /api/account/photo", s.mutating(s.guard.RequireAuth(s.handleAvatarUpload)))
 		mux.HandleFunc("DELETE /api/account/photo", s.mutating(s.guard.RequireAuth(s.handleAvatarDelete)))
+		// Every picture somebody has set, newest first, and making an older
+		// one current again (photos.go).
+		mux.HandleFunc("GET /api/account/photos", s.guard.RequireAuth(s.handlePhotos))
+		mux.HandleFunc("POST /api/account/photo/current", s.mutating(s.guard.RequireAuth(s.handlePhotoCurrent)))
+		// The Android app (androidapp.go): what is new while it is closed, and the APK.
+		mux.HandleFunc("POST /api/app/poll", s.mutating(s.requirePermission(auth.ActionNotifications, s.handleAppPoll)))
+		mux.HandleFunc("GET /api/app/android", s.guard.RequireAuth(s.handleAPKInfo))
+		mux.HandleFunc("GET /app/messenger.apk", s.guard.RequireAuth(s.handleAPK))
 		// Who is using the application: administrative, as it is everybody's
 		// activity.
 		mux.HandleFunc("GET /api/presence", s.requirePermission(auth.ActionManageUsers, s.handlePresence))

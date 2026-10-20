@@ -52,6 +52,10 @@ var publicAPI = map[string]string{
 	"/api/login/reset":  "sets a forgotten password; the texted code is the credential",
 	"/api/me":           "how the page asks whether anyone is signed in; answers 'nobody' anonymously",
 	"/api/first-admin":  "creates the first account on an empty instance, guarded by there being no users",
+	// Invite-only self-registration (registerroutes.go): the invite code is
+	// the credential, a session cannot exist yet, and it is rate-limited by
+	// address. The admin side (/api/admin/invites) is on the catalogue.
+	"/api/register": "creates an account from an invite code; the code is the credential, rate-limited",
 }
 
 func discoverAPIRoutes(t *testing.T) map[string][]string {

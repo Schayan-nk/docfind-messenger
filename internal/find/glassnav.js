@@ -83,7 +83,8 @@
   search.setAttribute('aria-label', 'جست‌وجو در پیام‌ها و صفحه‌ها');
   search.setAttribute('aria-keyshortcuts', 'Control+K');
   search.innerHTML = icon('search');
-  search.addEventListener('click', () => N.openPalette());
+  // A page with a search of its own (the messenger's) takes the button.
+  search.addEventListener('click', () => (window.DocfindPageSearch ? window.DocfindPageSearch() : N.openPalette()));
 
   dock.append(nav, search);
   // Played once per visit to the application, not on every page: a dock

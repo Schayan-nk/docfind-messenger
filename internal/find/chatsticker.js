@@ -82,14 +82,24 @@ function mount(node, item, opts = {}) {
 }
 
 // ------------------------------------------------------------ bubbles
+// A redraw of the chat (a new message, a read receipt, a send) builds every
+// bubble anew, and a GIF built anew loads again and starts from black: the
+// GIFs "refreshing" (2026-10-19). The same message keeps the same box, already
+// loaded and playing, moved into the new bubble.
+const drawn = new Map();
 export function drawSticker(m) {
   const x = m.extra || {}, md = m.media || (x.media ? { id: x.media, mime: x.mime } : {});
   const fmt = x.format || ({ 'image/webp': 'webp', 'application/json': 'tgs', 'video/webm': 'webm', 'image/gif': 'gif', 'video/mp4': 'mp4' })[md.mime];
   const gif = m.kind === 'gif';
-  const box = el('div', gif ? 'x-gif' : 'x-sticker');
-  box.setAttribute('role', 'img'); box.setAttribute('aria-label', gif ? 'گیف' : 'برچسب ' + (x.emoji || ''));
-  if (gif && x.w && x.h) box.style.aspectRatio = `${x.w} / ${x.h}`;
-  if (md.id && fmt) mount(box, { media: md.id, format: fmt, emoji: x.emoji }, { loop: gif });
+  const key = (m.chat || S.active) + ':' + (m.id || m.cid) + ':' + (md.id || '');
+  let box = drawn.get(key);
+  if (!box) {
+    box = el('div', gif ? 'x-gif' : 'x-sticker');
+    box.setAttribute('role', 'img'); box.setAttribute('aria-label', gif ? 'گیف' : 'برچسب ' + (x.emoji || ''));
+    if (gif && x.w && x.h) box.style.aspectRatio = `${x.w} / ${x.h}`;
+    if (md.id && fmt) mount(box, { media: md.id, format: fmt, emoji: x.emoji }, { loop: gif });
+    if (md.id) { drawn.set(key, box); if (drawn.size > 300) drawn.delete(drawn.keys().next().value); }
+  }
   queueMicrotask(() => { const b = box.closest('.m-bubble'); if (b && !gif) b.classList.add('x-bare'); });
   return box;
 }

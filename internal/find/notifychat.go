@@ -58,6 +58,7 @@ func (s *Server) chatNotice(ctx context.Context, n chat.Notice) {
 		}
 		if created {
 			queued += devices
+			s.android.bell.ring(u.Username) // the Android app's held poll answers now
 		}
 	}
 	if queued > 0 {
@@ -78,9 +79,9 @@ func (s *Server) chatCallNotice(ctx context.Context, n chat.CallNotice) {
 		return
 	}
 	now := time.Now()
-	kind := "تماس صوتی"
+	kind := "📞 تماس صوتی"
 	if n.Video {
-		kind = "تماس تصویری"
+		kind = "📹 تماس تصویری"
 	}
 	nt := notify.Notification{
 		Username:  u.Username,
@@ -105,6 +106,9 @@ func (s *Server) chatCallNotice(ctx context.Context, n chat.CallNotice) {
 	if err != nil {
 		logReportError("notification enqueue call", err)
 		return
+	}
+	if created {
+		s.android.bell.ring(u.Username) // a call rings on the Android app at once
 	}
 	if created && devices > 0 {
 		s.push.dispatcher.Wake()

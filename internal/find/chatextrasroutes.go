@@ -28,12 +28,16 @@ var (
 	chatextrascssJS []byte
 )
 
+// chatExtraScripts is this phase's page modules by path: the routes below, and
+// what the service worker keeps (workerAssets).
+var chatExtraScripts = map[string][]byte{
+	"/chatextras.js": chatextrasJS, "/chatpoll.js": chatpollJS, "/chatplace.js": chatplaceJS,
+	"/chatsticker.js": chatstickerJS, "/chatpackadmin.js": chatpackadminJS, "/chatsched.js": chatschedJS,
+	"/chatextrascss.js": chatextrascssJS,
+}
+
 func (s *Server) routeChatExtras(mux *http.ServeMux) {
-	for path, body := range map[string][]byte{
-		"/chatextras.js": chatextrasJS, "/chatpoll.js": chatpollJS, "/chatplace.js": chatplaceJS,
-		"/chatsticker.js": chatstickerJS, "/chatpackadmin.js": chatpackadminJS, "/chatsched.js": chatschedJS,
-		"/chatextrascss.js": chatextrascssJS,
-	} {
+	for path, body := range chatExtraScripts {
 		mux.HandleFunc("GET "+path, s.handleAsset(body, "text/javascript; charset=utf-8"))
 	}
 	api := func(f func(*chat.API, http.ResponseWriter, *http.Request)) http.HandlerFunc {

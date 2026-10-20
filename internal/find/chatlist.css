@@ -83,6 +83,9 @@ mark.m-hit { background: rgb(229 100 29 / .35); color: inherit; border-radius: 3
 
 /* ---- a colleague's DocFind picture over the avatar's letter (chatstate.js facePhoto) */
 .m-av-img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+/* A picture on its way: a quiet circle, not the letter it is about to cover
+   (facePhoto). */
+.m-av.m-av-wait { color: transparent; background: var(--surface-3, #2c2c2e) !important; }
 .m-av .dot { z-index: 1; }
 .m-chat-head .m-av.m-title-btn { cursor: pointer; }
 .cl-av .m-av-img { border-radius: 50%; }

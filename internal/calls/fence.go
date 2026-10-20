@@ -16,10 +16,12 @@ import (
 // the office network a legitimate relay peer IS a colleague's browser at a
 // 192.168.77.x address. Once this TURN server is reachable from the internet
 // that same leniency lets an authenticated client relay into internal hosts
-// (the databases on .1/.4/.13) -- a pivot that must be closed at the network
+// (the database and file servers beside it) -- a pivot that must be closed at the network
 // layer by isolating the TURN host so its relay egress cannot reach those
 // servers, or by serving TURN on the public interface only so private peers
-// are never legitimate. See the security review's F4.
+// are never legitimate. See the security review's F4. A TURN server that is
+// open to the internet runs with DOCFIND_TURN_PEERS=server (peerPermit and
+// guardedConn): its relays reach this server's own relays and media server only.
 func permitted(_ net.Addr, peer net.IP) bool {
 	if peer == nil || peer.IsLoopback() || peer.IsUnspecified() || peer.IsMulticast() ||
 		peer.IsLinkLocalUnicast() || peer.IsLinkLocalMulticast() || peer.IsInterfaceLocalMulticast() {
@@ -29,6 +31,18 @@ func permitted(_ net.Addr, peer net.IP) bool {
 		return false
 	}
 	return true
+}
+
+// peerPermit is the TURN permission check: a peer a relay may be opened to.
+// serverOnly allows this server's own addresses only (guardedConn then
+// limits those to live relays and OwnPorts).
+func peerPermit(own, bcast map[string]bool, serverOnly bool) func(net.Addr, net.IP) bool {
+	return func(_ net.Addr, peer net.IP) bool {
+		if !permitted(nil, peer) || bcast[peer.String()] {
+			return false
+		}
+		return !serverOnly || own[peer.String()]
+	}
 }
 
 // portSet is the relay ports live right now.
@@ -61,6 +75,7 @@ type guardedRelay struct {
 	turn.RelayAddressGeneratorPortRange
 	own, bcast map[string]bool
 	ports      *portSet
+	serverOnly bool // Config.ServerOnly
 }
 
 func (g *guardedRelay) AllocatePacketConn(network string, port int) (net.PacketConn, net.Addr, error) {
@@ -73,7 +88,7 @@ func (g *guardedRelay) AllocatePacketConn(network string, port int) (net.PacketC
 		p = u.Port
 		g.ports.set(p, true)
 	}
-	return &guardedConn{PacketConn: c, own: g.own, bcast: g.bcast, ports: g.ports, port: p}, a, nil
+	return &guardedConn{PacketConn: c, own: g.own, bcast: g.bcast, ports: g.ports, port: p, serverOnly: g.serverOnly}, a, nil
 }
 
 type guardedConn struct {
@@ -81,6 +96,7 @@ type guardedConn struct {
 	own, bcast map[string]bool
 	ports      *portSet
 	port       int
+	serverOnly bool // nothing but this server's own live relays and OwnPorts
 	once       sync.Once
 }
 
@@ -111,7 +127,7 @@ func (c *guardedConn) allowed(to net.Addr) bool {
 	if c.own[u.IP.String()] {
 		return u.Port != c.port && c.ports.has(u.Port)
 	}
-	return true
+	return !c.serverOnly
 }
 
 // ownAddresses is every address of this machine, and the broadcast address

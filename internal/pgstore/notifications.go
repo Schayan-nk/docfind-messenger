@@ -467,6 +467,76 @@ func (n *Notifications) Recent(ctx context.Context, username string, limit int) 
 	return out, rows.Err()
 }
 
+// ---------------------------------------------------------------- the app
+
+// TouchAppDevice records that the Android app on device asked as username,
+// and reports whether that is a beginning -- a device never seen, or one that
+// belonged to somebody else until now -- which starts from the newest
+// notification rather than the backlog.
+func (n *Notifications) TouchAppDevice(ctx context.Context, device, username, label, ua string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
+	defer cancel()
+	var before *string
+	err := n.db.Pool().QueryRow(ctx, `
+		WITH old AS (SELECT username FROM app_devices WHERE device_id = $1)
+		INSERT INTO app_devices (device_id, username, label, user_agent)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (device_id) DO UPDATE
+		   SET username = EXCLUDED.username, label = EXCLUDED.label,
+		       user_agent = EXCLUDED.user_agent, last_seen_at = now()
+		RETURNING (SELECT username FROM old)`,
+		device, username, clip(label, 60), clip(ua, 300)).Scan(&before)
+	if err != nil {
+		return false, err
+	}
+	if _, err := n.db.Pool().Exec(ctx, `
+		DELETE FROM app_devices WHERE username = $1 AND device_id NOT IN (
+			SELECT device_id FROM app_devices WHERE username = $1
+			 ORDER BY last_seen_at DESC LIMIT $2)`, username, maxDevicesPerUser); err != nil {
+		return false, err
+	}
+	return before == nil || *before != username, nil
+}
+
+// NotificationsAfter is username's notifications newer than after, oldest
+// first, at most limit, leaving out the expired (a call that stopped ringing).
+func (n *Notifications) NotificationsAfter(ctx context.Context, username string, after int64, limit int) ([]notify.Notification, error) {
+	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
+	defer cancel()
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	rows, err := n.db.Pool().Query(ctx, `
+		SELECT id, username, kind, dedupe_key, title, body, url, tag, urgency, created_at, expires_at, quiet
+		  FROM notifications
+		 WHERE username = $1 AND id > $2 AND expires_at > now()
+		 ORDER BY id LIMIT $3`, username, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []notify.Notification
+	for rows.Next() {
+		var nt notify.Notification
+		if err := rows.Scan(&nt.ID, &nt.Username, &nt.Kind, &nt.DedupeKey, &nt.Title, &nt.Body,
+			&nt.URL, &nt.Tag, &nt.Urgency, &nt.CreatedAt, &nt.ExpiresAt, &nt.Quiet); err != nil {
+			return nil, err
+		}
+		out = append(out, nt)
+	}
+	return out, rows.Err()
+}
+
+// LatestNotificationID is the id of username's newest notification, 0 for none.
+func (n *Notifications) LatestNotificationID(ctx context.Context, username string) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
+	defer cancel()
+	var id int64
+	err := n.db.Pool().QueryRow(ctx,
+		`SELECT COALESCE(MAX(id), 0) FROM notifications WHERE username = $1`, username).Scan(&id)
+	return id, err
+}
+
 // OutboxStats is the queue as an administrator sees it.
 type OutboxStats struct {
 	Pending       int       `json:"pending"`

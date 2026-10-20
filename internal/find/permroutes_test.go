@@ -45,6 +45,11 @@ var ownAccountAPI = map[string]string{
 	"/api/account/signout-others": "ending my own other sessions",
 	"/api/db-state":               "whether the database is down, for the banner every signed-in page shows",
 	"/api/account/photo":          "my own profile picture",
+	// Every picture I have set, and making an older one current (photos.go);
+	// somebody else's only with manage-users, checked in the handler.
+	"/api/account/photos":        "the pictures on a profile, as the picture itself is seen",
+	"/api/account/photo/current": "making one of my own pictures the current one",
+	"/api/app/android":           "which Android app version is on offer, to anybody signed in",
 	// Two-step sign-in is protection on MY account; an administrator withholding
 	// it would be withholding my own security. Each change asks for the
 	// password again (twostep.go).

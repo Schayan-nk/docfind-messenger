@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#142F40">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="پیام‌رسان">
+<title>ساخت حساب | پیام‌رسان</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+  /* Shared with the sign-in page: one sunk-field look, so registering and
+     signing in read as two halves of the same door. */
+  body {
+    min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+    padding: var(--s6);
+    padding-top: max(var(--s6), env(safe-area-inset-top));
+    padding-bottom: max(var(--s6), env(safe-area-inset-bottom));
+  }
+  .signin { width: 100%; max-width: 390px; padding: 28px; }
+  .signin .sunk {
+    display: flex; align-items: center; gap: var(--s2);
+    padding: 11px var(--s3);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    box-shadow: inset 2px 4px 9px rgb(0 0 0 / .55);
+    transition: box-shadow var(--normal) var(--ease);
+  }
+  .signin .sunk:focus-within {
+    box-shadow: inset 2px 4px 9px rgb(0 0 0 / .55), 0 0 0 2px var(--accent);
+  }
+  .signin .sunk .ic { width: 17px; height: 17px; flex: none; color: var(--fg-faint); }
+  .signin .sunk:focus-within .ic { color: var(--accent); }
+  .signin .bare {
+    flex: 1; min-width: 0;
+    background: none; border: 0; outline: none;
+    color: var(--fg); font: inherit; font-size: var(--text-base);
+  }
+  .signin .bare::placeholder { color: var(--fg-faint); }
+  .signin-go {
+    width: 100%; margin-top: var(--s5);
+    border-radius: var(--radius-full);
+    font-size: var(--text-md); font-weight: 700;
+  }
+  .signin .mark { display: flex; align-items: center; gap: 11px; margin-bottom: var(--s5); }
+  .signin h1 { font-size: 19px; }
+  .signin .sub { margin-top: 3px; color: var(--fg-muted); font-size: var(--text-base); }
+  .signin .field { margin-top: var(--s3); }
+</style>
+</head>
+
+<body>
+<form class="card signin glass rise" id="form" autocomplete="on">
+  <div class="mark">
+    <img src="/icon.png" alt="" width="40" height="40">
+    <div>
+      <h1>ساخت حساب</h1>
+      <div class="sub" id="sub">برای ساختن حساب به یک کد دعوت نیاز دارید.</div>
+    </div>
+  </div>
+
+  <div class="field" id="codeRow">
+    <label class="label" for="invite">کد دعوت</label>
+    <div class="sunk">
+      <svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg>
+      <input class="bare" id="invite" name="invite" autocapitalize="characters" autocorrect="off"
+             spellcheck="false" dir="ltr" placeholder="XXXX-XXXX-XXXX-XXXX" required>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label" for="display_name">نام نمایشی</label>
+    <div class="sunk">
+      <svg class="ic" aria-hidden="true"><use href="#i-user"/></svg>
+      <input class="bare" id="display_name" name="display_name" autocomplete="name"
+             placeholder="نامی که همکاران می‌بینند" maxlength="80" required>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label" for="username">نام کاربری</label>
+    <div class="sunk">
+      <svg class="ic" aria-hidden="true"><use href="#i-at-sign"/></svg>
+      <input class="bare" id="username" name="username" autocomplete="username"
+             autocapitalize="none" autocorrect="off" spellcheck="false" dir="ltr"
+             placeholder="latin_letters_digits" minlength="3" maxlength="64" required>
+    </div>
+    <div class="sub" style="margin-top:var(--s2)">حروف کوچک لاتین، رقم، نقطه، خط و زیرخط. بعداً عوض نمی‌شود.</div>
+  </div>
+
+  <div class="field">
+    <label class="label" for="password">گذرواژه</label>
+    <div class="sunk">
+      <svg class="ic" aria-hidden="true"><use href="#i-key-round"/></svg>
+      <input class="bare" id="password" name="password" type="password"
+             autocomplete="new-password" dir="ltr" minlength="10" placeholder="دست‌کم ۱۰ نویسه" required>
+    </div>
+    <div class="sub" style="margin-top:var(--s2)" id="rules">گذرواژه‌ای طولانی و یکتا بردارید؛ جای دیگری از آن استفاده نکنید.</div>
+  </div>
+
+  <div class="field">
+    <label class="label" for="password2">تکرار گذرواژه</label>
+    <div class="sunk">
+      <svg class="ic" aria-hidden="true"><use href="#i-key-round"/></svg>
+      <input class="bare" id="password2" type="password" autocomplete="new-password" dir="ltr"
+             minlength="10" placeholder="دوباره" required>
+    </div>
+  </div>
+
+  <button type="submit" id="go" class="btn btn-primary signin-go">ساختن حساب</button>
+  <div class="notice notice-bad hidden" id="msg" role="alert" style="margin-top:var(--s4)"></div>
+  <p style="margin:var(--s4) 0 0;text-align:center">
+    <span class="sub" style="margin:0">حساب دارید؟</span>
+    <a class="linkish" href="/login">وارد شوید</a>
+  </p>
+</form>
+
+<script>
+const $ = id => document.getElementById(id);
+function fail(text, good) {
+  const m = $('msg');
+  m.textContent = text;
+  m.className = 'notice ' + (good ? 'notice-ok' : 'notice-bad');
+  m.classList.remove('hidden');
+}
+
+// The code may arrive in the link an administrator sent: /register?i=CODE.
+// Prefill it and send the person straight to the name field.
+function prefillFromLink() {
+  const code = new URLSearchParams(location.search).get('i');
+  if (code) {
+    $('invite').value = code.trim();
+    $('display_name').focus();
+  } else {
+    $('invite').focus();
+  }
+}
+
+// Confirm the server actually takes registrations, and is not a fresh install
+// with no administrator yet; show the real password rules where they differ
+// from the default.
+async function init() {
+  prefillFromLink();
+  try {
+    const me = await (await fetch('/api/me', { credentials: 'same-origin' })).json();
+    if (!me.auth_enabled) { location.replace('/'); return; }
+    if (me.user) { location.replace('/'); return; }          // already signed in
+    if (me.needs_first_admin) { location.replace('/login'); return; }
+    const min = me.password_rules && me.password_rules.min_length;
+    if (min && min !== 10) {
+      $('password').minLength = $('password2').minLength = min;
+      $('rules').textContent = 'گذرواژه باید دست‌کم ' + min.toLocaleString('fa') + ' نویسه باشد؛ طولانی و یکتا.';
+    }
+  } catch (_) { /* a failed probe should not block the form */ }
+}
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('msg').classList.add('hidden');
+  const password = $('password').value;
+  if (password.length < ($('password').minLength || 10)) {
+    fail('گذرواژه باید دست‌کم ' + ($('password').minLength || 10).toLocaleString('fa') + ' نویسه باشد.');
+    return;
+  }
+  if (password !== $('password2').value) { fail('دو گذرواژه یکی نیستند.'); return; }
+
+  $('go').disabled = true;
+  $('go').textContent = 'در حال ساختن…';
+  try {
+    const r = await fetch('/api/register', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invite: $('invite').value.trim(),
+        username: $('username').value.trim(),
+        display_name: $('display_name').value.trim(),
+        password,
+      }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.ok && body.user) {
+      // Signed in already (the cookie is set). If the policy demands a second
+      // step, the sign-in page walks them through setting it up.
+      location.replace(body.user.two_step_required ? '/login' : '/');
+      return;
+    }
+    if (r.status === 429) {
+      fail(body.error || 'تلاش بیش از حد؛ چند دقیقه صبر کنید.');
+    } else {
+      fail(body.error || 'حساب ساخته نشد.');
+    }
+  } catch (_) {
+    fail('ارتباط با سرور برقرار نشد.');
+  } finally {
+    $('go').disabled = false;
+    $('go').textContent = 'ساختن حساب';
+  }
+});
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+init();
+</script>
+</body>
+</html>

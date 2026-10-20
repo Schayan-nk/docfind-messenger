@@ -90,10 +90,38 @@ export class Cache {
 export class Net extends EventTarget {
   constructor() {
     super();
-    this.ws = null; this.wait = new Map(); this.backoff = 1000; this.up = false; this.closed = false;
+    this.ws = null; this.wait = new Map(); this.backoff = 1000; this.up = false; this.closed = false; this.hiddenAt = 0;
     addEventListener('online', () => this.connect(true));
     addEventListener('offline', () => this.ws && this.ws.close());
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && !this.up) this.connect(true); });
+    // A phone freezes a page in the background and leaves its socket looking
+    // open long after the server dropped it: messages and "last seen" then
+    // stopped arriving with nothing on screen to say so. Back after a while,
+    // and every half minute while in view, the socket must answer a ping or
+    // it is replaced at once.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { this.hiddenAt = Date.now(); return; }
+      if (!this.up) { this.connect(true); return; }
+      if (Date.now() - this.hiddenAt > 10000) this.check(true);
+    });
+    setInterval(() => { if (this.up && !document.hidden) this.check(false); }, 30000);
+  }
+  // check pings the socket; one that does not answer is dead.
+  check(resumed) {
+    const ws = this.ws;
+    this.request('ping', {}, 5000).then(() => { if (resumed) this.emit('resumed'); }, () => { if (this.ws === ws) this.dead(); });
+  }
+  // dead lets a socket that stopped answering go and opens a new one now,
+  // without waiting out a back-off.
+  dead() {
+    const ws = this.ws; if (!ws) return;
+    ws.onclose = null; ws.onmessage = null;
+    try { ws.close(); } catch { }
+    this.up = false; this.ws = null;
+    for (const [, w] of this.wait) { clearTimeout(w.t); w.fail({ code: 'offline' }); }
+    this.wait.clear();
+    this.emit('state', 'connecting');
+    this.backoff = 1000;
+    this.connect(true);
   }
   emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); }
   async connect(now = false) {
@@ -114,9 +142,9 @@ export class Net extends EventTarget {
     ws.onmessage = ev => {
       let f; try { f = JSON.parse(ev.data); } catch { return; }
       if (f.t === 'ready') { this.up = true; this.backoff = 1000; this.emit('state', 'online'); }
-      if ((f.t === 'ack' || f.t === 'err') && f.id && this.wait.has(f.id)) {
+      if ((f.t === 'ack' || f.t === 'err' || f.t === 'pong') && f.id && this.wait.has(f.id)) {
         const w = this.wait.get(f.id); this.wait.delete(f.id); clearTimeout(w.t);
-        f.t === 'ack' ? w.ok(f.d) : w.fail(f.d);
+        f.t === 'err' ? w.fail(f.d) : w.ok(f.d);
       }
       this.emit(f.t, f);
     };

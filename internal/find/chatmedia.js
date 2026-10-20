@@ -70,16 +70,19 @@ export class Upload extends EventTarget {
   }
 }
 
-// compressPhoto makes a JPEG of at most 2560 pixels (a GIF keeps its frames).
+// compressPhoto makes a JPEG of at most 1280 pixels (a GIF keeps its frames):
+// sharp on a phone screen at a fraction of the bytes of a camera original,
+// for the sender's data and for every reader's. «بدون فشرده‌سازی، به‌صورت
+// فایل» keeps the original.
 export async function compressPhoto(file) {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return file;
   try {
     const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    const k = Math.min(1, 2560 / Math.max(bmp.width, bmp.height));
+    const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
     const c = document.createElement('canvas');
     c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
     c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.82));
     return blob && blob.size < file.size ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file;
   } catch { return file; }
 }
@@ -161,13 +164,18 @@ function video(m) {
 function round(m) {
   const gone = missing(m, 'm-round'); if (gone) return gone;
   const d = el('div', 'm-round');
-  const v = document.createElement('video'); v.playsInline = true; v.preload = 'metadata'; v.muted = true; v.loop = false;
-  if (m.local) v.src = m.local.url; else { v.src = mediaURL(m.media.id); if (m.media.thumb) v.poster = mediaURL(m.media.id, true); }
+  // The poster until a tap: the video itself is fetched when it is played,
+  // not when it scrolls past (mobile data), and an iPhone draws nothing for a
+  // video that has not played -- the poster is what the circle shows.
+  const v = document.createElement('video'); v.playsInline = true; v.preload = 'none'; v.muted = true; v.loop = false;
+  if (m.local) { v.src = m.local.url; if (m.local.poster) v.poster = m.local.poster; }
+  else if (m.media.thumb) v.poster = mediaURL(m.media.id, true);
   const r = el('span', 'm-round-ring'); r.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48" pathLength="100"/></svg>';
   d.append(v, r);
   if (m.media && m.media.dur) d.appendChild(el('span', 'm-dur', fmtDur(m.media.dur)));
   d.addEventListener('click', () => {
     if (m.local) return;
+    if (!v.getAttribute('src')) v.src = mediaURL(m.media.id);
     if (v.paused) { v.muted = false; v.currentTime = v.ended ? 0 : v.currentTime; v.play(); d.classList.add('big'); } else { v.pause(); d.classList.remove('big'); }
   });
   v.addEventListener('timeupdate', () => { r.querySelector('circle').style.strokeDashoffset = String(100 - (v.currentTime / (v.duration || 1)) * 100); });

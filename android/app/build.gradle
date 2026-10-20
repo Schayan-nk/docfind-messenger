@@ -1,0 +1,57 @@
+plugins {
+    id "com.android.application"
+}
+
+// The release key is never in the repository: keystore.properties is kept
+// outside it on the build machine (MESSENGER_KEYSTORE_PROPS names the file),
+// and without it the release build comes out unsigned.
+def keyProps = new Properties()
+def keyFile = file(System.getenv("MESSENGER_KEYSTORE_PROPS") ?: "../keystore.properties")
+if (keyFile.exists()) { keyFile.withInputStream { keyProps.load(it) } }
+
+// The server the app opens is yours, so it is not in the repository either:
+// messenger.baseUrl in local.properties (which git ignores), or the
+// MESSENGER_BASE_URL environment variable, e.g. https://chat.example.com.
+def localProps = new Properties()
+def localFile = rootProject.file("local.properties")
+if (localFile.exists()) { localFile.withInputStream { localProps.load(it) } }
+def baseUrl = System.getenv("MESSENGER_BASE_URL") ?: localProps["messenger.baseUrl"] ?: "https://messenger.example.com"
+
+android {
+    namespace "ir.schayan.messenger"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "ir.schayan.messenger"
+        minSdk 24
+        targetSdk 34
+        versionCode 2
+        versionName "1.0.1"
+        buildConfigField "String", "BASE_URL", "\"${baseUrl}\""
+    }
+
+    buildFeatures { buildConfig true }
+
+    signingConfigs {
+        if (keyProps["storeFile"]) {
+            release {
+                storeFile file(keyProps["storeFile"])
+                storePassword keyProps["storePassword"]
+                keyAlias keyProps["keyAlias"]
+                keyPassword keyProps["keyPassword"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keyProps["storeFile"]) { signingConfig signingConfigs.release }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

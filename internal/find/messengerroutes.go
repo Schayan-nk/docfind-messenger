@@ -63,6 +63,9 @@ var (
 	chatsearchJS []byte
 	//go:embed chatlist.css
 	chatlistCSS []byte
+	// The Telegram-like look over all of the above (loaded last).
+	//go:embed chatglass.css
+	chatglassCSS []byte
 	// Phase 6: the service worker's messenger part (imported by sw.js) and
 	// the page's notification settings and in-app alerts.
 	//go:embed chatsw.js
@@ -145,28 +148,36 @@ func (s *Server) chatAuth(next http.HandlerFunc) http.HandlerFunc {
 	return s.guard.RequireAuth(inner)
 }
 
+// chatScripts and chatStyles are the messenger page's own files by path: the
+// routes below, and what the service worker keeps so the page opens from the
+// phone's copy when the network stalls (workerAssets).
+var chatScripts = map[string][]byte{
+	"/messages.js": messagesJS, "/chatcore.js": chatcoreJS,
+	"/chatstate.js": chatstateJS, "/chatfmt.js": chatfmtJS, "/chatpane.js": chatpaneJS,
+	"/chatcompose.js": chatcomposeJS, "/chatmenu.js": chatmenuJS, "/chatwire.js": chatwireJS,
+	"/chatmedia.js": chatmediaJS, "/chatattach.js": chatattachJS, "/chatviewer.js": chatviewerJS, "/chatrec.js": chatrecJS,
+	"/chatgroup.js": chatgroupJS, "/chatgroupmake.js": chatgroupmakeJS, "/chatgroupadmin.js": chatgroupadminJS,
+	"/chatlist.js": chatlistJS, "/chatfolders.js": chatfoldersJS, "/chatsearch.js": chatsearchJS,
+	"/chatsw.js": chatswJS, "/chatnotify.js": chatnotifyJS,
+	"/chatcall.js": chatcallJS, "/chatcallrtc.js": chatcallrtcJS, "/chatcallui.js": chatcalluiJS, "/chatcalls.js": chatcallsJS,
+	"/chatperson.js": chatpersonJS,
+	"/chatgcall.js":  chatgcallJS, "/chatgcallrtc.js": chatgcallrtcJS, "/chatgcallui.js": chatgcalluiJS,
+	"/chatsecret.js": chatsecretJS, "/chatsecretpane.js": chatsecretpaneJS,
+	"/chatsecretcrypto.js": chatsecretcryptoJS, "/chatsecretcss.js": chatsecretcssJS,
+}
+
+var chatStyles = map[string][]byte{
+	"/chatgroup.css": chatgroupCSS, "/chatlist.css": chatlistCSS, "/chatglass.css": chatglassCSS, "/chatcall.css": chatcallCSS,
+}
+
 func (s *Server) routeChat(mux *http.ServeMux) {
 	mux.HandleFunc("GET /messages", s.signedInPage(s.handlePage(injectAssets(messagesHTML))))
-	mux.HandleFunc("GET /messages.js", s.handleAsset(messagesJS, "text/javascript; charset=utf-8"))
-	mux.HandleFunc("GET /chatcore.js", s.handleAsset(chatcoreJS, "text/javascript; charset=utf-8"))
-	for path, body := range map[string][]byte{
-		"/chatstate.js": chatstateJS, "/chatfmt.js": chatfmtJS, "/chatpane.js": chatpaneJS,
-		"/chatcompose.js": chatcomposeJS, "/chatmenu.js": chatmenuJS, "/chatwire.js": chatwireJS,
-		"/chatmedia.js": chatmediaJS, "/chatattach.js": chatattachJS, "/chatviewer.js": chatviewerJS, "/chatrec.js": chatrecJS,
-		"/chatgroup.js": chatgroupJS, "/chatgroupmake.js": chatgroupmakeJS, "/chatgroupadmin.js": chatgroupadminJS,
-		"/chatlist.js": chatlistJS, "/chatfolders.js": chatfoldersJS, "/chatsearch.js": chatsearchJS,
-		"/chatsw.js": chatswJS, "/chatnotify.js": chatnotifyJS,
-		"/chatcall.js": chatcallJS, "/chatcallrtc.js": chatcallrtcJS, "/chatcallui.js": chatcalluiJS, "/chatcalls.js": chatcallsJS,
-		"/chatperson.js": chatpersonJS,
-		"/chatgcall.js":  chatgcallJS, "/chatgcallrtc.js": chatgcallrtcJS, "/chatgcallui.js": chatgcalluiJS,
-		"/chatsecret.js": chatsecretJS, "/chatsecretpane.js": chatsecretpaneJS,
-		"/chatsecretcrypto.js": chatsecretcryptoJS, "/chatsecretcss.js": chatsecretcssJS,
-	} {
+	for path, body := range chatScripts {
 		mux.HandleFunc("GET "+path, s.handleAsset(body, "text/javascript; charset=utf-8"))
 	}
-	mux.HandleFunc("GET /chatgroup.css", s.handleAsset(chatgroupCSS, "text/css; charset=utf-8"))
-	mux.HandleFunc("GET /chatlist.css", s.handleAsset(chatlistCSS, "text/css; charset=utf-8"))
-	mux.HandleFunc("GET /chatcall.css", s.handleAsset(chatcallCSS, "text/css; charset=utf-8"))
+	for path, body := range chatStyles {
+		mux.HandleFunc("GET "+path, s.handleAsset(body, "text/css; charset=utf-8"))
+	}
 
 	mux.HandleFunc("GET /api/chat/ticket", s.chatAuth(s.handleChatTicket))
 	// The socket authenticates with a ticket in its first frame (chat.ServeWS),
@@ -180,7 +191,13 @@ func (s *Server) routeChat(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("GET /api/chat/chats", s.chatAuth(func(w http.ResponseWriter, r *http.Request) { s.chatAPI.Chats(w, r) }))
 	mux.HandleFunc("GET /api/chat/chats/{id}/messages", s.chatAuth(func(w http.ResponseWriter, r *http.Request) { s.chatAPI.Messages(w, r) }))
-	mux.HandleFunc("GET /api/chat/people", s.chatAuth(func(w http.ResponseWriter, r *http.Request) { s.chatAPI.People(w, r) }))
+	mux.HandleFunc("GET /api/chat/people", s.chatAuth(func(w http.ResponseWriter, r *http.Request) {
+		// Only an administrator (manage-users) is shown everybody (chat.API.People).
+		if s.can(r, auth.ActionManageUsers) {
+			r = r.WithContext(chat.WithDirectoryAdmin(r.Context()))
+		}
+		s.chatAPI.People(w, r)
+	}))
 	mux.HandleFunc("GET /api/chat/people/{user}/card", s.chatAuth(func(w http.ResponseWriter, r *http.Request) {
 		// An administrator (manage-users) may see any colleague's full contact
 		// details; everyone else sees PII only for people they share a chat with

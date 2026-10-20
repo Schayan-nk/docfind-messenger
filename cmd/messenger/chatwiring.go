@@ -80,7 +80,11 @@ func startTURN(svc *chat.Service, users *auth.Store, sfuPort int) {
 		}
 		return out
 	}
-	logf("calls: TURN on UDP and TCP %d, relays at %s ports %d-%d", c.Port, c.RelayIP, c.MinPort, c.MaxPort)
+	peers := "any peer but this machine's own services"
+	if c.ServerOnly {
+		peers = "this server's own relays and group-call media only (DOCFIND_TURN_PEERS=server)"
+	}
+	logf("calls: TURN on UDP and TCP %d, relays at %s ports %d-%d, reaching %s", c.Port, c.RelayIP, c.MinPort, c.MaxPort, peers)
 }
 
 // startSFU runs the group calls' media server (internal/calls/sfu.go) on

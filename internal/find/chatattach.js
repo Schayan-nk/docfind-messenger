@@ -61,13 +61,12 @@ async function start(chat, it) {
   };
   const list = S.msgs.get(chat.id) || []; list.push(m); S.msgs.set(chat.id, list);
   S.atBottom = true; hooks.renderMessages({ bottom: true });
-  chat.last = { text: it.text || label(it.kind), from: S.me, at: m.at }; hooks.renderList();
+  chat.last = { text: it.text || '', kind: it.kind, from: S.me, at: m.at }; hooks.renderList(); // the list labels the kind
   const row = { cid: it.cid, chat: chat.id, kind: it.kind, album: it.album, text: it.text, entities: it.entities, at: m.at, file: it.blob, name: it.name, finish: it.finish, uploadId: '', mediaId: 0, topic: m.topic };
   await S.cache.put('outbox', row);
   run(m, row);
 }
 
-const label = k => ({ photo: 'عکس', video: 'ویدیو', round: 'پیام ویدیویی', voice: 'پیام صوتی', file: 'فایل', doc: 'سند' })[k] || 'فایل';
 
 async function run(m, row) {
   try {
@@ -177,6 +176,16 @@ export function openSend(chat, files, asFileDefault = false) {
     grid.replaceChildren(...files.map((f, i) => {
       const c = el('div', 'm-send-item'); c.draggable = true; c.dataset.i = String(i);
       if (/^image\//.test(f.type)) { const u = URL.createObjectURL(f); urls.push(u); const img = new Image(); img.src = u; img.alt = ''; c.appendChild(img); }
+      if (/^image\/(jpeg|png|webp)$/.test(f.type)) { // crop, zoom or turn it before it goes (photoedit.js); a GIF keeps its frames
+        const ed = el('button', 'm-send-ed'); ed.type = 'button'; ed.setAttribute('aria-label', 'ویرایش عکس');
+        ed.innerHTML = svg('<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14 8l3 3"/>');
+        ed.addEventListener('click', async () => {
+          let out;
+          try { out = await (await import('/photoedit.js')).editPhoto(f, { aspects: true }); } catch { toast('این عکس باز نشد.'); return; }
+          if (out) { files[i] = out; paint(); }
+        });
+        c.appendChild(ed);
+      }
       else { const n = el('span', 'm-send-name', f.name); n.dir = 'auto'; c.append(el('span', 'm-send-ext', (f.name.split('.').pop() || '').toUpperCase().slice(0, 5)), n, el('span', 'm-send-size', fmtSize(f.size))); }
       const x = el('button', 'm-send-x'); x.type = 'button'; x.setAttribute('aria-label', 'برداشتن'); x.innerHTML = svg('<path d="M18 6L6 18M6 6l12 12"/>');
       x.addEventListener('click', () => { files.splice(i, 1); files.length ? paint() : close(); });

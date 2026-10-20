@@ -39,7 +39,7 @@ hooks.avatar = avatar;
 // -------------------------------------------------------------- status
 const CONN_TEXT = { offline: 'در انتظار شبکه…', connecting: 'در حال اتصال…', updating: 'در حال به‌روزرسانی…' };
 export { CONN_TEXT };
-function statusText(chat) {
+export function statusText(chat) {
   if (S.conn !== 'online' && CONN_TEXT[S.conn]) return { text: CONN_TEXT[S.conn] };
   const g = hooks.groupStatus && hooks.groupStatus(chat); if (g) return g;
   const t = S.typing.get(chat.id);
@@ -68,9 +68,11 @@ export function paintStatus() {
 hooks.paintStatus = paintStatus;
 
 export function header(chat) {
-  const h = el('div', 'm-chat-head');
+  const h = el('div', 'm-chat-head t-' + chat.type);
   const back = el('button', 'm-icon-btn m-back'); back.type = 'button'; back.setAttribute('aria-label', 'بازگشت');
   back.innerHTML = svg('<path d="M9 18l6-6-6-6"/>');
+  // What is waiting in the other chats rides on the way back (renderList).
+  const waiting = el('span', 'm-back-n'); waiting.id = 'm-back-n'; back.appendChild(waiting);
   back.addEventListener('click', () => history.back());
   const title = el('div', 'm-title'); const name = el('b', '', chat.title); name.dir = 'auto';
   const st = el('div', 'm-status'); st.id = 'm-status';

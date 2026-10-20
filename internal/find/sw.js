@@ -54,6 +54,14 @@ const SHELL = [
   '/manifest.webmanifest',
 ];
 
+// Everything else the pages are made of -- every script, style, font and icon
+// this build serves -- written in by the server as it serves this file
+// (stampWorker in version.go), and kept at install. Without it a phone whose
+// network stalled could open no more than the bare pages: on 2026-10-19 an
+// iPhone's connections stopped getting through for six minutes and the app
+// showed nothing at all, because the scripts had never been kept.
+const PRECACHE = [];
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE)
@@ -62,7 +70,7 @@ self.addEventListener('install', event => {
       // one missing file cannot cost the rest. A page that answered with a
       // redirect -- installed while signed out, it is the sign-in page -- is
       // not kept under the page's name.
-      .then(c => Promise.all(SHELL.map(url => fetch(url)
+      .then(c => Promise.all(SHELL.concat(PRECACHE).map(url => fetch(url)
         .then(res => (res.ok && !res.redirected) ? c.put(url, res) : null)
         .catch(() => {}))))
   );
@@ -117,8 +125,23 @@ self.addEventListener('activate', event => {
   );
 });
 
-// The shell's own addresses, by path. Only these are ever put in the cache.
-const SHELL_PATHS = new Set(SHELL);
+// The shell's own addresses and the files they are made of, by path. Only
+// these are ever put in the cache.
+const SHELL_PATHS = new Set(SHELL.concat(PRECACHE));
+
+// This worker's build, read off its own cache name, and what a response says
+// it is (X-Docfind-Build). A page left open across a release fetches the new
+// build's files through the older worker; kept, they would mix two releases in
+// the copy a stalled network falls back on, and a module from one with a
+// module from the other is a page that does not start.
+const BUILD = CACHE.slice('docfind-shell-'.length);
+
+// How long the network gets before this release's own copy answers instead,
+// and how long after that everything comes from the copy at once: a page is
+// dozens of files, and waiting WAIT for each in turn would take a minute to
+// open what the copy opens in a second.
+const WAIT = 3000, SLOW = 30000;
+let slowUntil = 0;
 
 self.addEventListener('fetch', event => {
   const req = event.request;
@@ -139,39 +162,56 @@ self.addEventListener('fetch', event => {
   // this app must not have, and a cached 401 would be worse still.
   if (url.pathname.startsWith('/api/')) return;
 
-  // Network first for the shell, falling back to cache when offline: the
-  // pages are small, and a stale UI that cannot talk to its own API is worth
-  // less than a fresh one.
+  // Network first, so a reachable server always wins and a release shows at
+  // once -- but the network gets WAIT, not for ever. A connection that opens
+  // and then hangs (a filtered or failing link) used to leave the app on a
+  // blank screen for as long as the phone kept trying; past WAIT this
+  // release's own copy answers, and the page connects by itself once the
+  // network is back.
   //
-  // KEPT ONLY IF IT IS THE SHELL, stored under its path with no query, and
-  // never when the server said no-store. Anything else is fetched and passed
-  // through untouched: the cache must hold the application, not a list of
-  // which customer, report or case somebody opened.
+  // KEPT ONLY IF IT IS THE SHELL, stored under its path with no query, never
+  // when the server said no-store, and only if it is this release's. Anything
+  // else is fetched and passed through untouched: the cache must hold the
+  // application, not a list of which customer, report or case somebody opened.
   const shell = SHELL_PATHS.has(url.pathname);
-  event.respondWith(
-    fetch(req)
-      .then(res => {
-        const noStore = /no-store/i.test((res && res.headers.get('Cache-Control')) || '');
-        if (shell && !noStore && res && res.ok && !res.redirected && res.type === 'basic') {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(url.pathname, copy)).catch(() => {});
-        }
-        return res;
-      })
-      .catch(async () => {
-        const hit = await caches.match(url.pathname, { ignoreSearch: true });
-        if (hit) return hit;
-        // Only a NAVIGATION gets the offline page. A stylesheet or a script
-        // that is missing from the cache must fail as itself: handing it an
-        // HTML document would have the browser parse markup as CSS, and the
-        // page would render unstyled with no clue why.
-        if (req.mode === 'navigate') {
-          const off = await caches.match(OFFLINE);
-          if (off) return off;
-        }
-        return Response.error();
-      })
-  );
+  event.respondWith((async () => {
+    const network = fetch(req).then(res => {
+      const noStore = /no-store/i.test((res && res.headers.get('Cache-Control')) || '');
+      const ours = !!res && res.headers.get('X-Docfind-Build') === BUILD;
+      if (shell && ours && !noStore && res && res.ok && !res.redirected && res.type === 'basic') {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(url.pathname, copy)).catch(() => {});
+      }
+      return res;
+    });
+    const kept = shell ? await caches.match(url.pathname, { ignoreSearch: true }) : null;
+    if (kept) {
+      if (Date.now() < slowUntil) { network.catch(() => {}); return kept; }
+      const first = await Promise.race([
+        network.then(res => res, () => null),
+        new Promise(done => setTimeout(done, WAIT, 'late')),
+      ]);
+      // A server error is no better than no answer while a copy exists.
+      if (first && first !== 'late' && first.status < 500) return first;
+      // Slow or gone (not merely an error): the rest of this page from the copy.
+      if (first === 'late' || first === null) slowUntil = Date.now() + SLOW;
+      network.catch(() => {});
+      return kept;
+    }
+    try {
+      return await network;
+    } catch (_) {
+      // Only a NAVIGATION gets the offline page. A stylesheet or a script
+      // that is missing from the cache must fail as itself: handing it an
+      // HTML document would have the browser parse markup as CSS, and the
+      // page would render unstyled with no clue why.
+      if (req.mode === 'navigate') {
+        const off = await caches.match(OFFLINE);
+        if (off) return off;
+      }
+      return Response.error();
+    }
+  })());
 });
 
 // ============================================================ notifications

@@ -131,15 +131,23 @@ async function settings() {
   const status = el('p', 'g-note', '…'); device.appendChild(status);
   const paintDevice = async () => {
     device.querySelectorAll('.btn').forEach(b => b.remove());
+    // Install before support: Safari exposes push only inside the home-screen
+    // app, so an iPhone tab looked "unsupported" and was never told the way in.
+    if (P && P.needsInstall && P.needsInstall()) { status.textContent = 'در آیفون، اعلان فقط وقتی کار می‌کند که برنامه با «افزودن به صفحهٔ اصلی» نصب شده باشد (iOS 16.4 به بعد).'; return; }
     if (!P || !P.supported()) { status.textContent = 'این مرورگر اعلان پیام را پشتیبانی نمی‌کند.'; return; }
-    if (P.needsInstall && P.needsInstall()) { status.textContent = 'در آیفون، اعلان فقط وقتی کار می‌کند که برنامه با «افزودن به صفحهٔ اصلی» نصب شده باشد (iOS 16.4 به بعد).'; return; }
     let on = false; try { on = await P.active(); } catch { }
     status.textContent = on ? 'اعلان‌ها روی این دستگاه روشن است.' : 'اعلان‌ها روی این دستگاه خاموش است.';
     const b = el('button', 'btn ' + (on ? '' : 'btn-primary'), on ? 'فرستادن اعلان آزمایشی' : 'روشن کردن اعلان روی این دستگاه'); b.type = 'button';
+    // enable(true) may ask for permission -- only inside this tap, which iOS
+    // requires -- and answers with the reason it could not, never by throwing:
+    // reading that answer is what stops «روشن شد» being shown for a device
+    // the server never heard from.
     b.addEventListener('click', async () => {
       b.disabled = true;
-      try { on ? await P.test() : await P.enable(); toast(on ? 'اعلان آزمایشی فرستاده شد.' : 'اعلان‌ها روشن شد.'); }
-      catch (e) { toast((e && e.message) || 'انجام نشد؛ اجازهٔ اعلان را در مرورگر بررسی کنید.'); }
+      try {
+        if (on) { await P.test(); toast('اعلان آزمایشی فرستاده شد.'); }
+        else { const why = await P.enable(true); toast(why || 'اعلان‌ها روی این دستگاه روشن شد.'); }
+      } catch (e) { toast((e && e.message) || 'انجام نشد؛ اجازهٔ اعلان را در مرورگر بررسی کنید.'); }
       b.disabled = false; paintDevice();
     });
     device.appendChild(b);
@@ -161,7 +169,64 @@ async function settings() {
   paintDevice();
 }
 
+// ------------------------------------------------------------ the list's line
+// The one place everybody passes, so a phone no notification can reach is
+// told how, by its own state; each state can be put off for three days. An
+// iPhone in a browser tab never gets one (iOS gives push only to the
+// home-screen app); a home-screen app with push off needs one tap.
+const HINT_KEY = 'msgr.pushhint.';
+let hint = null; // 'install' | 'off' | 'blocked' | null
+const putOff = s => { try { localStorage.setItem(HINT_KEY + s, String(Date.now())); } catch { } };
+const putOffNow = s => { try { return Date.now() - Number(localStorage.getItem(HINT_KEY + s) || 0) < 3 * 864e5; } catch { return false; } };
+async function checkPush() {
+  for (let i = 0; i < 40 && !window.DocfindPush; i++) await new Promise(r => setTimeout(r, 50)); // push.js is deferred
+  const P = window.DocfindPush;
+  let next = null;
+  if (P && P.needsInstall()) next = 'install';
+  else if (P && P.supported()) {
+    if (Notification.permission === 'denied') next = 'blocked';
+    else { let on = false; try { on = await P.active(); } catch { } if (!on) next = 'off'; }
+  }
+  if (next && putOffNow(next)) next = null;
+  if (next !== hint) { hint = next; if (hooks.renderList) hooks.renderList(); }
+}
+const SHARE = '<path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>';
+hooks.notifyRow = () => {
+  if (!hint) return null;
+  const box = el('div', 'm-pushhint'); box.setAttribute('role', 'status');
+  const head = el('div', 'm-pushhint-head');
+  const ic = el('span', 'm-pushhint-ic'); ic.innerHTML = svg(BELL);
+  const text = el('div', 'm-pushhint-text');
+  const later = el('button', 'm-pushhint-later', 'بعداً'); later.type = 'button';
+  later.addEventListener('click', () => { putOff(hint); hint = null; if (hooks.renderList) hooks.renderList(); });
+  head.append(ic, text, later); box.appendChild(head);
+  if (hint === 'install') {
+    text.append(el('b', '', 'اعلان پیام‌ها را روشن کنید'), el('span', '', 'در آیفون، اعلان فقط وقتی می‌رسد که پیام‌رسان را به صفحهٔ اصلی اضافه کرده باشید.'));
+    const steps = el('ol', 'm-pushhint-steps');
+    const s1 = el('li'); const si = el('span', 'm-pushhint-share'); si.innerHTML = svg(SHARE);
+    s1.append(document.createTextNode('دکمهٔ اشتراک‌گذاری '), si, document.createTextNode(' را بزنید (در Safari پایین صفحه، در Chrome بالای صفحه).'));
+    steps.append(s1, el('li', '', '«Add to Home Screen» را انتخاب کنید.'), el('li', '', 'پیام‌رسان را از آیکون تازهٔ صفحهٔ اصلی باز کنید و همین‌جا اعلان را روشن کنید.'));
+    box.appendChild(steps);
+  } else if (hint === 'off') {
+    text.append(el('b', '', 'اعلان‌ها روی این دستگاه خاموش است'), el('span', '', 'تا پیام و تماس تازه را وقتی برنامه بسته است هم ببینید.'));
+    const on = el('button', 'btn btn-primary btn-sm', 'روشن کردن'); on.type = 'button';
+    // enable(true) asks for permission inside this tap, as iOS requires.
+    on.addEventListener('click', async () => {
+      on.disabled = true;
+      const why = await window.DocfindPush.enable(true).catch(e => (e && e.message) || 'انجام نشد.');
+      toast(why || 'اعلان‌ها روی این دستگاه روشن شد.');
+      on.disabled = false; checkPush();
+    });
+    box.appendChild(on);
+  } else {
+    text.append(el('b', '', 'اجازهٔ اعلان بسته است'), el('span', '', 'در تنظیمات گوشی، بخش Notifications، پیام‌رسان را پیدا کنید و اعلان را روشن کنید.'));
+  }
+  return box;
+};
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkPush(); });
+
 queueMicrotask(() => {
+  checkPush();
   const nb = $('m-new-btn');
   if (nb) {
     const b = el('button', 'm-icon-btn'); b.type = 'button'; b.id = 'm-notify-btn'; b.setAttribute('aria-label', 'تنظیمات اعلان'); b.title = 'تنظیمات اعلان';
